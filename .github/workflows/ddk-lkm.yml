@@ -101,15 +101,18 @@ jobs:
         if [ "$KMI" = "android16-6.12" ]; then
           scripts/config --file "$KDIR/.config" -e CFI_ICALL_NORMALIZE_INTEGERS
         fi
+
+        # The DDK sources patch modpost to skip symbol resolution, so with
+        # CONFIG_RUST (and therefore CONFIG_EXTENDED_MODVERSIONS) modpost
+        # emits an empty ____version_ext_names[] initializer, which is not
+        # valid C. Current DDK makes that initializer a valid empty string;
+        # apply the same fix here for images built from older sources.
+        MODPOST_SRC="/opt/ddk/src/$KMI/scripts/mod/modpost.c"
+        sed -i 's/^static void check_exports(/static void __attribute__((unused)) check_exports(/' "$MODPOST_SRC"
+        sed -i 's|__version_ext_names\\") =\\n|__version_ext_names\\") = \\"\\"\\n|' "$MODPOST_SRC"
+
         make O="$KDIR" modules_prepare
         popd
-
-        # The prebuilt KDIR ships Module.symvers, but the freshly generated
-        # x86_64 KDIR does not. Without it modpost cannot resolve symbols and
-        # writes an invalid empty extended-modversions table for 6.12.
-        if [ -f "/opt/ddk/kdir/$KMI/Module.symvers" ]; then
-          cp "/opt/ddk/kdir/$KMI/Module.symvers" "$KDIR/Module.symvers"
-        fi
 
         if [ ! -f "$KDIR/include/generated/compile.h" ]; then
           cp "/opt/ddk/kdir/$KMI/include/generated/compile.h" "$KDIR/include/generated/"
