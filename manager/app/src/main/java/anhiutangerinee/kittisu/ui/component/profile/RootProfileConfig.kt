@@ -1,16 +1,21 @@
 package anhiutangerinee.kittisu.ui.component.profile
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,54 +30,50 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.text.isDigitsOnly
-import com.maxkeppeker.sheets.core.models.base.Header
-import com.maxkeppeker.sheets.core.models.base.rememberUseCaseState
-import com.maxkeppeler.sheets.input.InputDialog
-import com.maxkeppeler.sheets.input.models.InputHeader
-import com.maxkeppeler.sheets.input.models.InputSelection
-import com.maxkeppeler.sheets.input.models.InputTextField
-import com.maxkeppeler.sheets.input.models.InputTextFieldType
-import com.maxkeppeler.sheets.input.models.ValidationResult
-import com.maxkeppeler.sheets.list.ListDialog
-import com.maxkeppeler.sheets.list.models.ListOption
-import com.maxkeppeler.sheets.list.models.ListSelection
-import anhiutangerinee.kittisu.Natives
+import anhiutangerinee.kittisu.Natives.Profile.RootProfileFlag
 import anhiutangerinee.kittisu.R
+import anhiutangerinee.kittisu.domain.model.AppProfile
 import anhiutangerinee.kittisu.profile.Capabilities
 import anhiutangerinee.kittisu.profile.Groups
-import anhiutangerinee.kittisu.ui.component.rememberCustomDialog
+import anhiutangerinee.kittisu.toRawFlags
+import anhiutangerinee.kittisu.toRootProfileFlags
 import anhiutangerinee.kittisu.ui.component.settings.SegmentedColumn
 import anhiutangerinee.kittisu.ui.component.settings.SegmentedColumnScope
-import anhiutangerinee.kittisu.ui.component.settings.SettingsDropdownWidget
-import anhiutangerinee.kittisu.ui.component.settings.SettingsJumpPageWidget
+import anhiutangerinee.kittisu.ui.component.settings.SettingsBaseWidget
+import anhiutangerinee.kittisu.ui.component.settings.SettingsChooseWidget
 import anhiutangerinee.kittisu.ui.component.settings.SettingsTextFieldWidget
-import anhiutangerinee.kittisu.ui.util.isSepolicyValid
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RootProfileConfig(
-    profile: Natives.Profile,
-    onProfileChange: (Natives.Profile) -> Unit,
+    profile: AppProfile,
+    sepolicyValid: Boolean = true,
+    onValidateSepolicy: (String) -> Unit = {},
+    onProfileChange: (AppProfile) -> Unit,
 ) {
     SegmentedColumn {
         rootProfileConfig(
             profile,
-            onProfileChange
+            sepolicyValid,
+            onValidateSepolicy,
+            onProfileChange,
         )
     }
 }
 
 fun SegmentedColumnScope.rootProfileConfig(
-    profile: Natives.Profile,
-    onProfileChange: (Natives.Profile) -> Unit,
+    profile: AppProfile,
+    sepolicyValid: Boolean,
+    onValidateSepolicy: (String) -> Unit,
+    onProfileChange: (AppProfile) -> Unit,
 ) {
     item {
         UidPanel(uid = profile.uid, label = "uid", onUidChange = {
             onProfileChange(
                 profile.copy(
                     uid = it,
-                    rootUseDefault = false
-                )
+                    rootUseDefault = false,
+                ),
             )
         })
     }
@@ -82,8 +83,8 @@ fun SegmentedColumnScope.rootProfileConfig(
             onProfileChange(
                 profile.copy(
                     gid = it,
-                    rootUseDefault = false
-                )
+                    rootUseDefault = false,
+                ),
             )
         })
     }
@@ -98,8 +99,8 @@ fun SegmentedColumnScope.rootProfileConfig(
             onProfileChange(
                 profile.copy(
                     groups = it.map { group -> group.gid }.ifEmpty { listOf(0) },
-                    rootUseDefault = false
-                )
+                    rootUseDefault = false,
+                ),
             )
         }
     }
@@ -113,8 +114,8 @@ fun SegmentedColumnScope.rootProfileConfig(
             onProfileChange(
                 profile.copy(
                     capabilities = it.map { cap -> cap.cap },
-                    rootUseDefault = false
-                )
+                    rootUseDefault = false,
+                ),
             )
         }
     }
@@ -124,81 +125,72 @@ fun SegmentedColumnScope.rootProfileConfig(
             onProfileChange(
                 profile.copy(
                     namespace = it,
-                    rootUseDefault = false
-                )
+                    rootUseDefault = false,
+                ),
             )
         }
     }
 
     item {
-        SELinuxPanel(profile = profile, onSELinuxChange = { domain, rules ->
+        RootProfileFlagPanel(selected = profile.flags.toRootProfileFlags()) {
             onProfileChange(
                 profile.copy(
-                    context = domain,
-                    rules = rules,
-                    rootUseDefault = false
-                )
+                    flags = it.toRawFlags(),
+                ),
             )
-        })
+        }
+    }
+
+    item {
+        SELinuxPanel(
+            profile = profile,
+            sepolicyValid = sepolicyValid,
+            onValidateSepolicy = onValidateSepolicy,
+            onSELinuxChange = { domain, rules ->
+                onProfileChange(
+                    profile.copy(
+                        context = domain,
+                        rules = rules,
+                        rootUseDefault = false,
+                    ),
+                )
+            },
+        )
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun GroupsPanel(selected: List<Groups>, closeSelection: (selection: Set<Groups>) -> Unit) {
-    val selectGroupsDialog = rememberCustomDialog { dismiss: () -> Unit ->
-        val groups = Groups.entries.toTypedArray().sortedWith(
+    val groups = remember(selected) {
+        Groups.entries.toTypedArray().sortedWith(
             compareBy<Groups> { if (selected.contains(it)) 0 else 1 }
-                .then(compareBy {
-                    when (it) {
-                        Groups.ROOT -> 0
-                        Groups.SYSTEM -> 1
-                        Groups.SHELL -> 2
-                        else -> Int.MAX_VALUE
-                    }
-                })
-                .then(compareBy { it.name })
-
-        )
-        val options = groups.map { value ->
-            ListOption(
-                titleText = value.display,
-                subtitleText = value.desc,
-                selected = selected.contains(value),
-            )
-        }
-
-        val selection = HashSet(selected)
-
-        ListDialog(
-            state = rememberUseCaseState(visible = true, onFinishedRequest = {
-                closeSelection(selection)
-            }, onCloseRequest = {
-                dismiss()
-            }),
-            header = Header.Default(
-                title = stringResource(R.string.profile_groups),
-            ),
-            selection = ListSelection.Multiple(
-                showCheckBoxes = true,
-                options = options,
-                maxChoices = 32, // Kernel only supports 32 groups at most
-            ) { indecies, _ ->
-                // Handle selection
-                selection.clear()
-                indecies.forEach { index ->
-                    val group = groups[index]
-                    selection.add(group)
-                }
-            }
+                .then(
+                    compareBy {
+                        when (it) {
+                            Groups.ROOT -> 0
+                            Groups.SYSTEM -> 1
+                            Groups.SHELL -> 2
+                            else -> Int.MAX_VALUE
+                        }
+                    },
+                )
+                .then(compareBy { it.name }),
         )
     }
+    val selectedIndices = remember(groups, selected) {
+        groups.mapIndexedNotNull { index, group -> index.takeIf { group in selected } }.toSet()
+    }
 
-    SettingsJumpPageWidget(
+    SettingsChooseWidget(
         title = stringResource(R.string.profile_groups),
         iconPlaceholder = false,
-        onClick = {
-            selectGroupsDialog.show()
+        items = groups.map { it.display },
+        itemDescriptions = groups.map { it.desc },
+        selectedIndices = selectedIndices,
+        maxSelected = 32,
+        onSelectedIndicesChange = { indices ->
+            closeSelection(indices.mapNotNull { index -> groups.getOrNull(index) }.toSet())
         },
         descriptionColumnContent = {
             FlowRow {
@@ -206,10 +198,11 @@ fun GroupsPanel(selected: List<Groups>, closeSelection: (selection: Set<Groups>)
                     AssistChip(
                         modifier = Modifier.padding(3.dp),
                         onClick = {},
-                        label = { Text(group.display) })
+                        label = { Text(group.display) },
+                    )
                 }
             }
-        }
+        },
     )
 }
 
@@ -217,51 +210,27 @@ fun GroupsPanel(selected: List<Groups>, closeSelection: (selection: Set<Groups>)
 @Composable
 fun CapsPanel(
     selected: Collection<Capabilities>,
-    closeSelection: (selection: Set<Capabilities>) -> Unit
+    closeSelection: (selection: Set<Capabilities>) -> Unit,
 ) {
-    val selectCapabilitiesDialog = rememberCustomDialog { dismiss ->
-        val caps = Capabilities.entries.toTypedArray().sortedWith(
+    val caps = remember(selected) {
+        Capabilities.entries.toTypedArray().sortedWith(
             compareBy<Capabilities> { if (selected.contains(it)) 0 else 1 }
-                .then(compareBy { it.name })
-        )
-        val options = caps.map { value ->
-            ListOption(
-                titleText = value.display,
-                subtitleText = value.desc,
-                selected = selected.contains(value),
-            )
-        }
-
-        val selection = HashSet(selected)
-
-        ListDialog(
-            state = rememberUseCaseState(visible = true, onFinishedRequest = {
-                closeSelection(selection)
-            }, onCloseRequest = {
-                dismiss()
-            }),
-            header = Header.Default(
-                title = stringResource(R.string.profile_capabilities),
-            ),
-            selection = ListSelection.Multiple(
-                showCheckBoxes = true,
-                options = options
-            ) { indecies, _ ->
-                // Handle selection
-                selection.clear()
-                indecies.forEach { index ->
-                    val group = caps[index]
-                    selection.add(group)
-                }
-            }
+                .then(compareBy { it.name }),
         )
     }
+    val selectedIndices = remember(caps, selected) {
+        caps.mapIndexedNotNull { index, capability -> index.takeIf { capability in selected } }
+            .toSet()
+    }
 
-    SettingsJumpPageWidget(
+    SettingsChooseWidget(
         title = stringResource(R.string.profile_capabilities),
         iconPlaceholder = false,
-        onClick = {
-            selectCapabilitiesDialog.show()
+        items = caps.map { it.display },
+        itemDescriptions = caps.map { it.desc },
+        selectedIndices = selectedIndices,
+        onSelectedIndicesChange = { indices ->
+            closeSelection(indices.mapNotNull { index -> caps.getOrNull(index) }.toSet())
         },
         descriptionColumnContent = {
             FlowRow {
@@ -269,10 +238,11 @@ fun CapsPanel(
                     AssistChip(
                         modifier = Modifier.padding(3.dp),
                         onClick = {},
-                        label = { Text(group.display) })
+                        label = { Text(group.display) },
+                    )
                 }
             }
-        }
+        },
     )
 }
 
@@ -291,7 +261,7 @@ private fun UidPanel(uid: Int, label: String, onUidChange: (Int) -> Unit) {
         state = state,
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Number,
-            imeAction = ImeAction.Done
+            imeAction = ImeAction.Done,
         ),
         onKeyboardAction = {
             keyboardController?.hide()
@@ -317,113 +287,160 @@ private fun UidPanel(uid: Int, label: String, onUidChange: (Int) -> Unit) {
         }
     }
 }
+
 @Composable
 fun MountNameSpacePanel(
-    profile: Natives.Profile, onMntNamespaceChange: (namespaceType: Int) -> Unit
+    profile: AppProfile,
+    onMntNamespaceChange: (namespaceType: Int) -> Unit,
 ) {
-    SettingsDropdownWidget(
+    SettingsChooseWidget(
         iconPlaceholder = false,
-        title = stringResource(id = R.string.profile_namespace), items = listOf(
+        title = stringResource(id = R.string.profile_namespace),
+        items = listOf(
             stringResource(id = R.string.profile_namespace_inherited),
             stringResource(id = R.string.profile_namespace_global),
             stringResource(id = R.string.profile_namespace_individual),
-        ), selectedIndex = profile.namespace, onSelectedIndexChange = { index ->
+        ),
+        selectedIndex = profile.namespace,
+        onSelectedIndexChange = { index ->
             onMntNamespaceChange(index)
-        })
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RootProfileFlagPanel(
+    selected: List<RootProfileFlag>,
+    onFlagChange: (flags: List<RootProfileFlag>) -> Unit,
+) {
+    val caps = remember(selected) {
+        RootProfileFlag.entries.toTypedArray().sortedWith(
+            compareBy<RootProfileFlag> { if (selected.contains(it)) 0 else 1 }
+                .then(compareBy { it.name }),
+        )
+    }
+    val selectedIndices = remember(caps, selected) {
+        caps.mapIndexedNotNull { index, flag -> index.takeIf { flag in selected } }.toSet()
+    }
+    val descriptions = caps.map { stringResource(it.desc) }
+
+    SettingsChooseWidget(
+        title = stringResource(R.string.profile_flags),
+        iconPlaceholder = false,
+        items = caps.map { it.display },
+        itemDescriptions = descriptions,
+        selectedIndices = selectedIndices,
+        onSelectedIndicesChange = { indices ->
+            onFlagChange(indices.mapNotNull { index -> caps.getOrNull(index) })
+        },
+        descriptionColumnContent = {
+            FlowRow {
+                selected.forEach { group ->
+                    AssistChip(
+                        modifier = Modifier.padding(3.dp),
+                        onClick = {},
+                        label = { Text(group.display) },
+                    )
+                }
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SELinuxPanel(
-    profile: Natives.Profile,
-    onSELinuxChange: (domain: String, rules: String) -> Unit
+    profile: AppProfile,
+    sepolicyValid: Boolean,
+    onValidateSepolicy: (String) -> Unit,
+    onSELinuxChange: (domain: String, rules: String) -> Unit,
 ) {
-    val editSELinuxDialog = rememberCustomDialog { dismiss ->
-        var domain by remember { mutableStateOf(profile.context) }
-        var rules by remember { mutableStateOf(profile.rules) }
+    var showDialog by remember { mutableStateOf(false) }
 
-        val inputOptions = listOf(
-            InputTextField(
-                text = domain,
-                header = InputHeader(
-                    title = stringResource(id = R.string.profile_selinux_domain),
-                ),
-                type = InputTextFieldType.OUTLINED,
-                required = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Ascii,
-                    imeAction = ImeAction.Next
-                ),
-                resultListener = {
-                    domain = it ?: ""
-                },
-                validationListener = { value ->
-                    // value can be a-zA-Z0-9_
-                    val regex = Regex("^[a-z_]+:[a-z0-9_]+:[a-z0-9_]+(:[a-z0-9_]+)?$")
-                    if (value?.matches(regex) == true) ValidationResult.Valid
-                    else ValidationResult.Invalid("Domain must be in the format of \"user:role:type:level\"")
-                }
-            ),
-            InputTextField(
-                text = rules,
-                header = InputHeader(
-                    title = stringResource(id = R.string.profile_selinux_rules),
-                ),
-                type = InputTextFieldType.OUTLINED,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Ascii,
-                ),
-                singleLine = false,
-                resultListener = {
-                    rules = it ?: ""
-                },
-                validationListener = { value ->
-                    if (isSepolicyValid(value)) ValidationResult.Valid
-                    else ValidationResult.Invalid("SELinux rules is invalid!")
-                }
-            )
-        )
-
-        InputDialog(
-            state = rememberUseCaseState(visible = true,
-                onFinishedRequest = {
-                    onSELinuxChange(domain, rules)
-                },
-                onCloseRequest = {
-                    dismiss()
-                }),
-            header = Header.Default(
-                title = stringResource(R.string.profile_selinux_context),
-            ),
-            selection = InputSelection(
-                input = inputOptions
-            )
-        )
-    }
-
-    SettingsJumpPageWidget(
+    SettingsBaseWidget(
         title = stringResource(R.string.profile_selinux_context),
         iconPlaceholder = false,
         description = profile.context,
         onClick = {
-            editSELinuxDialog.show()
-        }
-    )
+            showDialog = true
+        },
+    ) {}
+
+    if (showDialog) {
+        var domain by remember(profile.context) { mutableStateOf(profile.context) }
+        var rules by remember(profile.rules) { mutableStateOf(profile.rules) }
+        LaunchedEffect(rules) { onValidateSepolicy(rules) }
+        val canConfirm = isSELinuxDomainValid(domain) && sepolicyValid
+
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = {
+                Text(text = stringResource(R.string.profile_selinux_context))
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedTextField(
+                        value = domain,
+                        onValueChange = { domain = it },
+                        label = { Text(text = stringResource(R.string.profile_selinux_domain)) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = ImeAction.Next,
+                        ),
+                        singleLine = true,
+                        isError = domain.isNotEmpty() && !isSELinuxDomainValid(domain),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = rules,
+                        onValueChange = { rules = it },
+                        label = { Text(text = stringResource(R.string.profile_selinux_rules)) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                        ),
+                        singleLine = false,
+                        minLines = 4,
+                        isError = !sepolicyValid,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = canConfirm,
+                    onClick = {
+                        onSELinuxChange(domain, rules)
+                        showDialog = false
+                    },
+                ) {
+                    Text(text = stringResource(android.R.string.ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text(text = stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 @Preview
 @Composable
 private fun RootProfileConfigPreview() {
-    var profile by remember { mutableStateOf(Natives.Profile("")) }
+    var profile by remember { mutableStateOf(AppProfile("")) }
     RootProfileConfig(profile = profile) {
         profile = it
     }
 }
 
-private fun isTextValidUid(text: String): Boolean {
-    return try {
-        text.isNotEmpty() && text.isDigitsOnly() && text.toInt() >= 0
-    } catch (_: Throwable) {
-        false
-    }
+private fun isTextValidUid(text: String): Boolean = try {
+    text.isNotEmpty() && text.isDigitsOnly() && text.toInt() >= 0
+} catch (_: Throwable) {
+    false
 }
+
+private fun isSELinuxDomainValid(value: String): Boolean = value.matches(Regex("^[a-z_]+:[a-z0-9_]+:[a-z0-9_]+(:[a-z0-9_]+)?$"))

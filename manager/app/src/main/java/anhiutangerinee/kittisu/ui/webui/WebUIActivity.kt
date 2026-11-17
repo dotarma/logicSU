@@ -18,18 +18,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
-import anhiutangerinee.kittisu.ksuApp
+import anhiutangerinee.kittisu.data.AppSettingsRepository
+import anhiutangerinee.kittisu.data.packageinfo.AppIconDataSource
+import anhiutangerinee.kittisu.data.packageinfo.InstalledPackageRepository
+import anhiutangerinee.kittisu.data.webui.WebUiRepository
 import anhiutangerinee.kittisu.ui.theme.KernelSUTheme
-import anhiutangerinee.kittisu.ui.viewmodel.ModuleViewModel
+import anhiutangerinee.kittisu.ui.viewmodel.SuperUserViewModel
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 @SuppressLint("SetJavaScriptEnabled")
 class WebUIActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
-
         // Enable edge to edge
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -50,18 +54,33 @@ class WebUIActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MainContent(activity: ComponentActivity, onFinish: () -> Unit) {
-    val moduleId = remember { activity.intent.getStringExtra("id") }
+    val moduleId = remember { activity.intent.data?.getQueryParameter("id") }
     val webUIState = remember { WebUIState() }
-    val moduleViewModel = viewModel<ModuleViewModel>(
-        viewModelStoreOwner = ksuApp
-    )
+    val superUserViewModel = koinViewModel<SuperUserViewModel>()
+    val settingsRepository = koinInject<AppSettingsRepository>()
+    val packageRepository = koinInject<InstalledPackageRepository>()
+    val appIconDataSource = koinInject<AppIconDataSource>()
+    val webUiRepository = koinInject<WebUiRepository>()
+    val monetColorsProvider = koinInject<MonetColorsProvider>()
+    val colorsCss = monetColorsProvider.getColorsCss()
+    val currentColorsCss = rememberUpdatedState(colorsCss)
 
     LaunchedEffect(moduleId) {
         if (moduleId == null) {
             onFinish()
             return@LaunchedEffect
         }
-        prepareWebView(activity, moduleId, webUIState, moduleViewModel)
+        prepareWebView(
+            activity,
+            moduleId,
+            webUIState,
+            superUserViewModel,
+            settingsRepository,
+            packageRepository,
+            appIconDataSource,
+            webUiRepository,
+            { currentColorsCss.value },
+        )
     }
 
     DisposableEffect(Unit) {

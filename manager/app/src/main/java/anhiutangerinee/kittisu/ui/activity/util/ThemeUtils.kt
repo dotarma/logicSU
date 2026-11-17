@@ -1,106 +1,42 @@
 package anhiutangerinee.kittisu.ui.activity.util
 
-import android.content.Context
-import android.database.ContentObserver
-import android.os.Handler
-import android.provider.Settings
-import androidx.core.content.edit
-import anhiutangerinee.kittisu.ui.MainActivity
+import anhiutangerinee.kittisu.data.theme.ThemeRepository
+import anhiutangerinee.kittisu.ui.theme.BackgroundManager
 import anhiutangerinee.kittisu.ui.theme.CardConfig
 import anhiutangerinee.kittisu.ui.theme.ThemeConfig
-import kotlinx.coroutines.flow.MutableStateFlow
+import anhiutangerinee.kittisu.ui.viewmodel.SettingsUiAction
+import anhiutangerinee.kittisu.ui.viewmodel.SettingsViewModel
 
-class ThemeChangeContentObserver(
-    handler: Handler,
-    private val onThemeChanged: () -> Unit
-) : ContentObserver(handler) {
-    override fun onChange(selfChange: Boolean) {
-        super.onChange(selfChange)
-        onThemeChanged()
-    }
-}
+class ThemeUtils(
+    private val themeConfig: ThemeConfig,
+    private val themeRepository: ThemeRepository,
+    private val cardConfig: CardConfig,
+    private val backgroundManager: BackgroundManager,
+) {
 
-object ThemeUtils {
-
-    fun initializeThemeSettings(activity: MainActivity, settingsStateFlow: MutableStateFlow<MainActivity.SettingsState>) {
-        val prefs = activity.getSharedPreferences("settings", Context.MODE_PRIVATE)
-        val isFirstRun = prefs.getBoolean("is_first_run", true)
-
-        settingsStateFlow.value = MainActivity.SettingsState(
-            isHideOtherInfo = prefs.getBoolean("is_hide_other_info", false),
-            dpi = prefs.getInt("app_dpi", 0),
-            predictiveBackAnimation = MainActivity.PredictiveBackAnimation.fromValueOrDefault(
-                prefs.getString(
-                    "predictive_back_animation",
-                    ""
-                )!!
-            ),
-            predictiveBackExitDirection = MainActivity.PredictiveBackExitDirection.fromValueOrDefault(
-                prefs.getString("predictive_back_exit_direction", "")!!
-            ),
-        )
-
-        if (isFirstRun) {
-            ThemeConfig.preventBackgroundRefresh = false
-            activity.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE).edit {
-                putBoolean("prevent_background_refresh", false)
-            }
-            prefs.edit { putBoolean("is_first_run", false) }
-        }
-
-        // 加载保存的背景设置
-        loadThemeMode()
-        loadThemeColors()
-        loadDynamicColorState()
-        CardConfig.load(activity.applicationContext)
+    fun initializeThemeSettings(settingsViewModel: SettingsViewModel) {
+        settingsViewModel.dispatch(SettingsUiAction.InitializeFirstRun)
+        loadThemeSettings()
+        settingsViewModel.dispatch(SettingsUiAction.Initialize)
     }
 
-    fun registerThemeChangeObserver(activity: MainActivity): ThemeChangeContentObserver {
-        val contentObserver = ThemeChangeContentObserver(Handler(activity.mainLooper)) {
-            activity.runOnUiThread {
-                if (!ThemeConfig.preventBackgroundRefresh) {
-                    ThemeConfig.backgroundImageLoaded = false
-                    loadCustomBackground()
-                }
-            }
-        }
-
-        activity.contentResolver.registerContentObserver(
-            Settings.System.getUriFor("ui_night_mode"),
-            false,
-            contentObserver
-        )
-
-        return contentObserver
-    }
-
-    fun unregisterThemeChangeObserver(activity: MainActivity, observer: ThemeChangeContentObserver) {
-        activity.contentResolver.unregisterContentObserver(observer)
-    }
-
-    fun onActivityPause(activity: MainActivity) {
-        CardConfig.save(activity.applicationContext)
-        activity.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE).edit {
-            putBoolean("prevent_background_refresh", true)
-        }
-        ThemeConfig.preventBackgroundRefresh = true
+    fun onActivityPause() {
+        cardConfig.save()
     }
 
     fun onActivityResume() {
-        if (!ThemeConfig.backgroundImageLoaded && !ThemeConfig.preventBackgroundRefresh) {
-            loadCustomBackground()
-        }
+        loadThemeSettings()
     }
 
-    private fun loadThemeMode() {
-    }
-
-    private fun loadThemeColors() {
-    }
-
-    private fun loadDynamicColorState() {
-    }
-
-    private fun loadCustomBackground() {
+    private fun loadThemeSettings() {
+        themeConfig.forceDarkMode = themeRepository.loadThemeMode()
+        themeConfig.seedColor = themeRepository.loadSeedColor()
+        themeConfig.useDynamicColor = themeRepository.loadDynamicColorState()
+        themeConfig.dynamicColorSpec = themeRepository.loadDynamicColorSpec()
+        themeConfig.dynamicPaletteStyle = themeRepository.loadDynamicPaletteStyle(
+            themeConfig.dynamicColorSpec,
+        )
+        cardConfig.load()
+        backgroundManager.loadCustomBackground()
     }
 }

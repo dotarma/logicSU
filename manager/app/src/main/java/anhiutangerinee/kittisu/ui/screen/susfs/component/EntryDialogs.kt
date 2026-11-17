@@ -31,6 +31,7 @@ import anhiutangerinee.kittisu.ui.component.settings.SegmentedColumnScope
 import anhiutangerinee.kittisu.ui.component.settings.SettingsDropdownWidget
 import anhiutangerinee.kittisu.ui.component.settings.SettingsJumpPageWidget
 import anhiutangerinee.kittisu.ui.util.LocalSnackbarHost
+import anhiutangerinee.kittisu.ui.util.showReplacingSnackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -68,12 +69,12 @@ fun EntryDetailDialog(
                             Text(
                                 text = label,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Text(
                                 text = value,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                     }
@@ -83,8 +84,8 @@ fun EntryDetailDialog(
                 Button(
                     onClick = onDelete,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+                        containerColor = MaterialTheme.colorScheme.error,
+                    ),
                 ) {
                     Text(stringResource(R.string.delete))
                 }
@@ -125,7 +126,7 @@ fun ManualAddDialog(
     onConfirm: () -> Unit,
     showImportFromFile: Boolean = false,
     onImportFromFile: (String) -> Unit = {},
-    formContent: SegmentedColumnScope.() -> Unit
+    formContent: SegmentedColumnScope.() -> Unit,
 ) {
     val context = LocalContext.current
     val snackbarHost = LocalSnackbarHost.current
@@ -137,7 +138,7 @@ fun ManualAddDialog(
     val importFromFileLabel = stringResource(R.string.susfs_entry_import_from_file)
 
     val pickFileLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
         uri?.let {
             scope.launch {
@@ -151,8 +152,8 @@ fun ManualAddDialog(
 
                 val error = decodedContent.exceptionOrNull()
                 if (error != null) {
-                    snackbarHost.showSnackbar(
-                        if (error is CharacterCodingException) fileNotTextMsg else fileReadFailedMsg
+                    snackbarHost.showReplacingSnackbar(
+                        if (error is CharacterCodingException) fileNotTextMsg else fileReadFailedMsg,
                     )
                     return@launch
                 }
@@ -181,9 +182,10 @@ fun ManualAddDialog(
                                     title = stringResource(R.string.susfs_entry_select_subtype),
                                     description = selectedSubtype,
                                     iconPlaceholder = false,
-                                    selectedIndex = subtypes.indexOf(selectedSubtype).coerceAtLeast(0),
-                                    items = subtypes,
-                                    onSelectedIndexChange = { index -> onSubtypeChange(subtypes[index]) }
+                                    choice = subtypes.indexOf(selectedSubtype).coerceAtLeast(0),
+                                    data = subtypes,
+                                    renderBackgroundBlur = false,
+                                    onChoiceChange = { index -> onSubtypeChange(subtypes[index]) },
                                 )
                             }
                         }
@@ -194,6 +196,7 @@ fun ManualAddDialog(
                                     icon = Icons.Default.UploadFile,
                                     title = importFromFileLabel,
                                     description = stringResource(R.string.susfs_entry_import_hint),
+                                    renderBackgroundBlur = false,
                                     onClick = { pickFileLauncher.launch(arrayOf("*/*")) },
                                 )
                             }
@@ -203,7 +206,7 @@ fun ManualAddDialog(
             },
             confirmButton = {
                 Button(
-                    onClick = onConfirm
+                    onClick = onConfirm,
                 ) {
                     Text(stringResource(R.string.add))
                 }
@@ -217,9 +220,7 @@ fun ManualAddDialog(
     }
 }
 
-fun String.toImportedEntryLines(): List<String> {
-    return lineSequence()
-        .map { it.replace("\uFEFF", "").trim() }
-        .filter { it.isNotEmpty() && !it.startsWith("//") && !it.startsWith("#") }
-        .toList()
-}
+fun String.toImportedEntryLines(): List<String> = lineSequence()
+    .map { it.replace("\uFEFF", "").trim() }
+    .filter { it.isNotEmpty() && !it.startsWith("//") && !it.startsWith("#") }
+    .toList()

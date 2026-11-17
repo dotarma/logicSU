@@ -20,11 +20,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import anhiutangerinee.kittisu.R
-import anhiutangerinee.kittisu.data.susfs.SuSFSConfigHelper
-import anhiutangerinee.kittisu.data.susfs.SusPathItem
+import anhiutangerinee.kittisu.domain.model.SusPathItem
 import anhiutangerinee.kittisu.ui.component.settings.SettingsJumpPageWidget
 import anhiutangerinee.kittisu.ui.component.settings.SettingsTextFieldWidget
 import anhiutangerinee.kittisu.ui.screen.susfs.RegisterSuSFSRefresh
@@ -35,7 +33,13 @@ import anhiutangerinee.kittisu.ui.screen.susfs.component.SuSFSDescriptionCard
 import anhiutangerinee.kittisu.ui.screen.susfs.component.susfsEntryList
 import anhiutangerinee.kittisu.ui.screen.susfs.component.toImportedEntryLines
 import anhiutangerinee.kittisu.ui.util.LocalSnackbarHost
+import anhiutangerinee.kittisu.ui.util.showReplacingSnackbar
+import anhiutangerinee.kittisu.ui.viewmodel.SuSFSUiAction
+import anhiutangerinee.kittisu.ui.viewmodel.SuSFSViewModel
+import anhiutangerinee.kittisu.ui.viewmodel.awaitSuSFSBoolean
+import anhiutangerinee.kittisu.ui.viewmodel.awaitSuSFSConfig
 import kotlinx.coroutines.launch
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,8 +48,8 @@ fun SusPathTab(
     innerPadding: PaddingValues,
     onRegisterRefresh: SuSFSRefreshRegistrar,
 ) {
+    val configHelper = koinViewModel<SuSFSViewModel>()
     val snackbarHost = LocalSnackbarHost.current
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var entries by remember { mutableStateOf<Set<SusPathItem>>(emptySet()) }
@@ -81,6 +85,7 @@ fun SusPathTab(
     val noEntriesMsg = stringResource(R.string.susfs_entry_no_entries)
     val noEntriesHint = stringResource(R.string.susfs_entry_no_entries_hint)
     val operationFailedMsg = stringResource(R.string.susfs_operation_failed)
+    val susfsEntryImportSuccess = stringResource(R.string.susfs_entry_import_success)
 
     LazyColumn(
         modifier = Modifier
@@ -137,10 +142,12 @@ fun SusPathTab(
                 var successCount = 0
                 var failCount = 0
                 paths.forEach { path ->
-                    val ok = if (selectedSubtype == subtypeLoop) {
-                        SuSFSConfigHelper.addSusPathLoop(path)
-                    } else {
-                        SuSFSConfigHelper.addSusPath(path)
+                    val ok = awaitSuSFSBoolean(configHelper) { reply ->
+                        SuSFSUiAction.AddSusPath(
+                            path = path,
+                            loop = selectedSubtype == subtypeLoop,
+                            reply = reply,
+                        )
                     }
                     if (ok) {
                         successCount++
@@ -149,7 +156,9 @@ fun SusPathTab(
                     }
                 }
                 if (successCount > 0) {
-                    entries = SuSFSConfigHelper.refreshConfig().sus_path
+                    entries = awaitSuSFSConfig(configHelper) { reply ->
+                        SuSFSUiAction.Refresh(reply)
+                    }?.sus_path.orEmpty()
                 }
                 if (paths.size == 1) {
                     if (successCount > 0) {
@@ -158,13 +167,13 @@ fun SusPathTab(
                         snackbarMessage = operationFailedMsg
                     }
                 } else {
-                    snackbarMessage = context.getString(R.string.susfs_entry_import_success, successCount, failCount)
+                    snackbarMessage = susfsEntryImportSuccess.format(successCount, failCount)
                     if (failCount == 0) {
                         showManualAdd = false
                     }
                 }
                 isLoading = false
-                snackbarMessage?.let { snackbarHost.showSnackbar(it) }
+                snackbarMessage?.let { snackbarHost.showReplacingSnackbar(it) }
             }
         },
         formContent = {
@@ -176,11 +185,12 @@ fun SusPathTab(
                     enabled = !isLoading,
                     lineLimits = TextFieldLineLimits.MultiLine(
                         minHeightInLines = 4,
-                        maxHeightInLines = 8
+                        maxHeightInLines = 8,
                     ),
+                    renderBackgroundBlur = false,
                 )
             }
-        }
+        },
     )
 
     detailItem?.let { item ->
@@ -189,20 +199,24 @@ fun SusPathTab(
             title = detailTitle,
             fields = listOf(
                 pathLabel to item.path,
-                isLoopLabel to if (item.is_loop) isLoopLabel else isNotLoopLabel
+                isLoopLabel to if (item.is_loop) isLoopLabel else isNotLoopLabel,
             ),
             onDismiss = { detailItem = null },
             onDelete = {
                 scope.launch {
                     isLoading = true
-                    val ok = SuSFSConfigHelper.removeSusPath(item.path)
+                    val ok = awaitSuSFSBoolean(configHelper) { reply ->
+                        SuSFSUiAction.RemoveSusPath(item.path, reply)
+                    }
                     if (ok) {
-                        entries = SuSFSConfigHelper.refreshConfig().sus_path
+                        entries = awaitSuSFSConfig(configHelper) { reply ->
+                            SuSFSUiAction.Refresh(reply)
+                        }?.sus_path.orEmpty()
                         detailItem = null
                     } else {
                         isLoading = false
                         scope.launch {
-                            snackbarHost.showSnackbar(operationFailedMsg)
+                            snackbarHost.showReplacingSnackbar(operationFailedMsg)
                         }
                     }
                     isLoading = false

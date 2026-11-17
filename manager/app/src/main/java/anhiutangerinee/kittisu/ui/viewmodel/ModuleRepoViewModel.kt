@@ -1,215 +1,195 @@
 package anhiutangerinee.kittisu.ui.viewmodel
 
-import android.os.Parcelable
-import android.util.Log
-import android.widget.Toast
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.annotation.StringRes
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import anhiutangerinee.kittisu.R
-import anhiutangerinee.kittisu.ksuApp
-import anhiutangerinee.kittisu.ui.util.module.ReleaseInfo
-import anhiutangerinee.kittisu.ui.util.module.fetchModuleDetail
-import anhiutangerinee.kittisu.ui.activity.util.isNetworkAvailable
-import anhiutangerinee.kittisu.ui.util.HanziToPinyin
-import com.topjohnwu.superuser.io.SuFile
+import anhiutangerinee.kittisu.domain.model.CatalogModule
+import anhiutangerinee.kittisu.domain.model.ModuleCatalogResult
+import anhiutangerinee.kittisu.domain.model.ModuleReleaseAsset
+import anhiutangerinee.kittisu.domain.model.RepositoryFailure
+import anhiutangerinee.kittisu.domain.model.RepositorySource
+import anhiutangerinee.kittisu.domain.usecase.GetBooleanPreferenceUseCase
+import anhiutangerinee.kittisu.domain.usecase.GetCatalogModuleUseCase
+import anhiutangerinee.kittisu.domain.usecase.IsCatalogModuleCurrentUseCase
+import anhiutangerinee.kittisu.domain.usecase.ObserveCatalogModulesUseCase
+import anhiutangerinee.kittisu.domain.usecase.ObserveModuleCatalogRefreshingUseCase
+import anhiutangerinee.kittisu.domain.usecase.ObserveRepositorySourcesUseCase
+import anhiutangerinee.kittisu.domain.usecase.RefreshModuleCatalogUseCase
+import anhiutangerinee.kittisu.domain.usecase.SetBooleanPreferenceUseCase
+import anhiutangerinee.kittisu.domain.usecase.TransliterateTextUseCase
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.parcelize.Parcelize
-import okhttp3.Request
-import org.json.JSONArray
-import org.json.JSONObject
 
-/**
- * @author AlexLiuDev233
- * @date 2025/12/6.
- */
-class ModuleRepoViewModel : ViewModel() {
-    companion object {
-        private const val TAG = "ModuleRepoViewModel"
-        private const val MODULES_URL = "https://modules.kernelsu.org/modules.json"
+enum class CatalogContent(@param:StringRes val resId: Int? = null) {
+    LOADING,
+    MODULES,
+    FAILED,
+    SEARCH_EMPTY(R.string.search_no_any_match),
+    SOURCE_EMPTY(R.string.repo_source_empty),
+}
+
+data class ModuleRepoUiState(
+    val modules: List<CatalogModule> = emptyList(),
+    val sortStargazerCountFirst: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val isPullRefreshing: Boolean = false,
+    val search: String = "",
+    val sources: List<RepositorySource> = emptyList(),
+    val repositoryUrl: String? = null,
+    val failures: Map<String, RepositoryFailure> = emptyMap(),
+) {
+    val content: CatalogContent get() = when {
+        modules.isNotEmpty() -> CatalogContent.MODULES
+        isRefreshing -> CatalogContent.LOADING
+        sources.any { it.url == repositoryUrl && it.url in failures } -> CatalogContent.FAILED
+        search.isNotBlank() -> CatalogContent.SEARCH_EMPTY
+        else -> CatalogContent.SOURCE_EMPTY
+    }
+}
+
+sealed interface ModuleRepoUiAction {
+    data object Refresh : ModuleRepoUiAction
+    data object PullRefresh : ModuleRepoUiAction
+    data class Search(val query: String) : ModuleRepoUiAction
+    data class SetStarsFirst(val enabled: Boolean) : ModuleRepoUiAction
+}
+
+class ModuleRepoViewModel(
+    private val observeModules: ObserveCatalogModulesUseCase,
+    observeRefreshing: ObserveModuleCatalogRefreshingUseCase,
+    private val refreshCatalog: RefreshModuleCatalogUseCase,
+    getBooleanPreference: GetBooleanPreferenceUseCase,
+    private val setBooleanPreference: SetBooleanPreferenceUseCase,
+    private val transliterateText: TransliterateTextUseCase,
+    private val observeSources: ObserveRepositorySourcesUseCase,
+    private val getModule: GetCatalogModuleUseCase,
+    private val isCurrent: IsCatalogModuleCurrentUseCase,
+    private val savedState: SavedStateHandle,
+    repositoryUrl: String? = null,
+) : ViewModel() {
+    private val search = MutableStateFlow(savedState.get<String>("repository-search") ?: "")
+    private val selectedRepository = MutableStateFlow<String?>(savedState["selected-repository"] ?: repositoryUrl)
+    private val selectedSources = combine(observeSources.sources, selectedRepository) { sources, selected ->
+        val url = sources.firstOrNull { it.url == selected }?.url ?: sources.firstOrNull()?.url
+        sources to url
     }
 
-    var sortStargazerCountFirst by mutableStateOf(false)
-    private var _modules = mutableStateOf<List<RepoModule>>(emptyList())
-    val modules: List<RepoModule> by derivedStateOf {
-        _modules.value
-            // 搜索过滤
-            .filter { module ->
-                module.moduleId.contains(search, true) ||
-                        module.moduleName.contains(search, true) ||
-                        HanziToPinyin.getInstance().toPinyinString(module.moduleName)?.contains(search, true) == true
-            }
-            .sortedWith(compareByDescending<RepoModule> { module ->
-                // 已安装模块优先：存在文件的记为 true（在 compareByDescending 中 true > false）
-                SuFile.open("/data/adb/modules/${module.moduleId}/module.prop").exists()
-            }.thenByDescending { module ->
-                if (sortStargazerCountFirst) module.stargazerCount else 0
-            })
+    private fun activeRepository(): String? = observeSources.sources.value.let { sources ->
+        sources.firstOrNull { it.url == selectedRepository.value }?.url ?: sources.firstOrNull()?.url
     }
 
-    var isRefreshing by mutableStateOf(false)
-    var search by mutableStateOf("")
-
-    @Immutable
-    @Parcelize
-    data class Author(
-        val name: String,
-        val link: String,
-    ) : Parcelable
-
-    @Immutable
-    @Parcelize
-    data class RepoModule(
-        val moduleId: String,
-        val moduleName: String,
-        val authors: String,
-        val authorList: List<Author>,
-        val summary: String,
-        val metamodule: Boolean,
-        val stargazerCount: Int,
-        val updatedAt: String,
-        val createdAt: String,
-        val latestRelease: String,
-        val latestReleaseTime: String,
-        val latestVersionCode: Int,
-        val latestAsset: ReleaseInfo?,
-        val installed: Boolean,
-        val readme: String,
-        val sourceUrl: String,
-        val releases: List<ReleaseInfo>
-    ) : Parcelable
-
-    fun refresh(
-        onFailure: (() -> Unit)? = null
-    ) {
-        viewModelScope.launch {
-            val netAvailable = isNetworkAvailable(ksuApp)
-            withContext(Dispatchers.Main) { isRefreshing = true }
-            val parsed = withContext(Dispatchers.IO) { if (!netAvailable) null else fetchModulesInternal(onFailure) }
-            withContext(Dispatchers.Main) {
-                if (parsed != null) {
-                    _modules.value = parsed
-                } else {
-                    Toast.makeText(
-                        ksuApp,
-                        ksuApp.getString(R.string.network_offline), Toast.LENGTH_SHORT
-                    ).show()
-                }
-                isRefreshing = false
-            }
-        }
+    fun selectRepository(url: String) {
+        if (observeSources.sources.value.none { it.url == url }) return
+        val changed = activeRepository() != url
+        savedState["selected-repository"] = url
+        selectedRepository.value = url
+        if (changed) updateSearch("")
     }
+    private val sortStarsFirst = MutableStateFlow(
+        getBooleanPreference("module_repo_sort_star_first", false),
+    )
+    private val pullRefreshing = MutableStateFlow(false)
 
-    private suspend fun fetchModulesInternal(
-        onFailure: (() -> Unit)? = null
-    ): List<RepoModule> {
-        return runCatching {
-            val request = Request.Builder().url(MODULES_URL).build()
-            ksuApp.okhttpClient.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return emptyList()
-                val body = resp.body?.string() ?: return emptyList()
-                val json = JSONArray(body)
-                coroutineScope {
-                    val jobs = (0 until json.length()).map { idx ->
-                        async {
-                            val item = json.optJSONObject(idx)
-                            if (item != null) parseRepoModule(item) else null
-                        }
-                    }
-
-                    jobs.awaitAll().filterNotNull()
-                }
-            }
-        }.onFailure {
-            onFailure?.invoke()
-        }.getOrElse {
-            Log.e(TAG, "fetch modules failed", it)
-            emptyList()
-        }
-    }
-
-    private suspend fun parseRepoModule(item: JSONObject): RepoModule? {
-        val moduleId = item.optString("moduleId", "")
-        if (moduleId.isEmpty()) return null
-        val moduleName = item.optString("moduleName", "")
-        val authorsArray = item.optJSONArray("authors")
-        val authorList = if (authorsArray != null) {
-            (0 until authorsArray.length())
-                .mapNotNull { idx ->
-                    val authorObj = authorsArray.optJSONObject(idx) ?: return@mapNotNull null
-                    val name = authorObj.optString("name", "").trim()
-                    var link = authorObj.optString("link", "").trim()
-                    if (link.startsWith("`") && link.endsWith("`") && link.length >= 2) {
-                        link = link.substring(1, link.length - 1)
-                    }
-                    if (name.isEmpty()) null else Author(name = name, link = link)
-                }
-        } else {
-            emptyList()
-        }
-        val authors = if (authorList.isNotEmpty()) authorList.joinToString(", ") { it.name } else item.optString("authors", "")
-        val summary = item.optString("summary", "")
-        val metamodule = item.optBoolean("metamodule", false)
-        val stargazerCount = item.optInt("stargazerCount", 0)
-        val updatedAt = item.optString("updatedAt", "")
-        val createdAt = item.optString("createdAt", "")
-
-        var latestRelease = ""
-        var latestReleaseTime = ""
-        var latestVersionCode = 0
-        var latestAsset: ReleaseInfo? = null
-        val releases: MutableList<ReleaseInfo> = ArrayList()
-        val lr = item.optJSONObject("latestRelease")
-        if (lr != null) {
-            val lrName = lr.optString("name", lr.optString("version", ""))
-            val lrTime = lr.optString("time", "")
-            val vcAny = lr.opt("versionCode")
-            latestVersionCode = when (vcAny) {
-                is Number -> vcAny.toInt()
-                is String -> vcAny.toIntOrNull() ?: 0
-                else -> 0
-            }
-            latestRelease = lrName
-            latestReleaseTime = lrTime
-        }
-        val detail = withContext(Dispatchers.IO) {
-            fetchModuleDetail((moduleId))
-        }
-
-        detail?.releases?.forEach { it ->
-            releases.add(it)
-            if (it.name != latestRelease) return@forEach
-
-            latestAsset = it
-        }
-
-        return RepoModule(
-            moduleId = moduleId,
-            moduleName = moduleName,
-            authors = authors,
-            authorList = authorList,
-            summary = summary,
-            metamodule = metamodule,
-            stargazerCount = stargazerCount,
-            updatedAt = updatedAt,
-            createdAt = createdAt,
-            latestRelease = latestRelease,
-            latestReleaseTime = latestReleaseTime,
-            latestVersionCode = latestVersionCode,
-            latestAsset = latestAsset,
-            installed = SuFile.open("/data/adb/modules/${moduleId}/module.prop").exists(),
-            readme = detail?.readme.orEmpty(),
-            sourceUrl = detail?.sourceUrl.orEmpty(),
-            releases = releases
+    private val catalogState = combine(
+        observeModules(),
+        selectedSources,
+        search,
+        sortStarsFirst,
+    ) { modules, selection, query, starsFirst ->
+        visibleState(
+            ModuleRepoUiState(
+                modules = modules,
+                sortStargazerCountFirst = starsFirst,
+                search = query,
+                repositoryUrl = selection.second,
+            ),
+            selection.first,
         )
+    }.flowOn(Dispatchers.Default)
+    val state: StateFlow<ModuleRepoUiState> = combine(
+        catalogState,
+        observeRefreshing.sources,
+        observeSources.failures,
+        pullRefreshing,
+    ) { catalog, refreshingSources, failures, pulling ->
+        val refreshing = refreshingSources.any { it == catalog.repositoryUrl }
+        catalog.copy(isRefreshing = refreshing, isPullRefreshing = pulling && refreshing, failures = failures)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(),
+        ModuleRepoUiState(
+            sortStargazerCountFirst = sortStarsFirst.value,
+            search = search.value,
+            isRefreshing = true,
+            sources = observeSources.sources.value,
+            repositoryUrl = activeRepository(),
+            failures = observeSources.failures.value,
+        ),
+    )
+    val uiState: StateFlow<ModuleRepoUiState> = state
+
+    private fun visibleState(catalog: ModuleRepoUiState, sources: List<RepositorySource>): ModuleRepoUiState = catalog.copy(
+        modules = catalog.modules.filter { module ->
+            module.repositoryUrl == catalog.repositoryUrl &&
+                (
+                    module.moduleId.contains(catalog.search, true) || module.moduleName.contains(catalog.search, true) ||
+                        transliterateText(module.moduleName).contains(catalog.search, true)
+                    )
+        }.sortedByDescending { if (catalog.sortStargazerCountFirst) it.stargazerCount else 0 },
+        sources = sources,
+    )
+
+    fun resolveModule(catalogId: String): CatalogModule? = observeModules().value.firstOrNull { module ->
+        module.catalogId == catalogId && module.repositoryUrl == activeRepository() &&
+            observeSources.sources.value.any { it.url == module.repositoryUrl }
+    }
+
+    fun resolveAsset(catalogId: String, asset: ModuleReleaseAsset): CatalogModule? = resolveModule(catalogId)?.takeIf { module ->
+        isCurrent(module) && module.latestAsset?.assets?.any { it.hasSameIdentity(asset) && it.hasSameVerification(asset) } == true
+    }
+
+    suspend fun resolveModuleForInstall(catalogId: String): CatalogModule? {
+        val module = resolveModule(catalogId) ?: return null
+        val loaded = (getModule(module.moduleId, module.repositoryUrl) as? ModuleCatalogResult.Success)?.value ?: return null
+        return resolveModule(loaded.catalogId)?.takeIf { it.detailLoaded && isCurrent(it) }
+    }
+
+    fun updateSearch(value: String) {
+        savedState["repository-search"] = value
+        search.value = value
+    }
+
+    fun setSortStargazerCountFirst(enabled: Boolean) {
+        setBooleanPreference("module_repo_sort_star_first", enabled)
+        sortStarsFirst.value = enabled
+    }
+
+    fun refresh(force: Boolean = true, fromPull: Boolean = false) {
+        viewModelScope.launch {
+            if (fromPull && pullRefreshing.value) return@launch
+            if (fromPull) pullRefreshing.value = true
+            try {
+                activeRepository()?.let { refreshCatalog(it, force) }
+            } finally {
+                if (fromPull) pullRefreshing.value = false
+            }
+        }
+    }
+
+    fun dispatch(action: ModuleRepoUiAction) {
+        when (action) {
+            ModuleRepoUiAction.Refresh -> refresh()
+            ModuleRepoUiAction.PullRefresh -> refresh(fromPull = true)
+            is ModuleRepoUiAction.Search -> updateSearch(action.query)
+            is ModuleRepoUiAction.SetStarsFirst -> setSortStargazerCountFirst(action.enabled)
+        }
     }
 }

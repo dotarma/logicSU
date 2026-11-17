@@ -1,116 +1,195 @@
 package anhiutangerinee.kittisu.data.update
 
+import android.os.Build
+import android.util.Log
 import anhiutangerinee.kittisu.BuildConfig
-import anhiutangerinee.kittisu.ksuApp
-import anhiutangerinee.kittisu.ui.activity.util.isNetworkAvailable
-import anhiutangerinee.kittisu.ui.util.module.LatestVersionInfo
-import okhttp3.Request
-import org.json.JSONArray
+import anhiutangerinee.kittisu.data.network.NetworkRequestRepository
+import anhiutangerinee.kittisu.domain.model.ManagerApkSource
+import anhiutangerinee.kittisu.domain.model.ManagerUpdateChannel
+import anhiutangerinee.kittisu.domain.model.ManagerUpdateInfo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-enum class UpdateChannel(val preferenceValue: String) {
-    STABLE("stable"),
-    BETA("beta"),
-    NIGHTLY("nightly");
+class ManagerUpdateRepository(
+    private val networkRequestRepository: NetworkRequestRepository,
+) {
+    private companion object {
+        const val UPDATE_CALL_TIMEOUT_SECONDS = 8L
+        const val TAG = "ManagerUpdateRepository"
+        const val REPOSITORY = "terebiko/KittiSU"
+        const val WORKFLOW_FILE = "build-manager.yml"
+        const val BRANCH = "main"
+        const val RELEASE_ARTIFACT = "Manager-release"
+        val GITHUB_HEADERS = mapOf("Accept" to "application/vnd.github+json")
 
-    companion object {
-        fun fromPreference(value: String?) = entries.firstOrNull {
-            it.preferenceValue == value
-        } ?: STABLE
-    }
-}
-
-private const val API_ROOT = "https://api.github.com/repos/terebiko/KittiSU"
-
-fun checkManagerUpdate(channel: UpdateChannel): LatestVersionInfo {
-    if (!isNetworkAvailable(ksuApp)) return LatestVersionInfo()
-    return runCatching {
-        when (channel) {
-            UpdateChannel.STABLE -> requestJson("$API_ROOT/releases/latest")?.let {
-                ManagerUpdateParser.release(it)
-            }
-            UpdateChannel.BETA -> requestArray("$API_ROOT/releases?per_page=20")?.let {
-                ManagerUpdateParser.beta(it)
-            }
-            UpdateChannel.NIGHTLY -> requestJson(
-                "$API_ROOT/actions/artifacts?name=Manager-release&per_page=20"
-            )?.let {
-                ManagerUpdateParser.nightly(it, BuildConfig.GIT_COMMIT)
-            }
-        } ?: LatestVersionInfo()
-    }.getOrDefault(LatestVersionInfo())
-}
-
-private fun requestJson(url: String): JSONObject? = request(url)?.let(::JSONObject)
-private fun requestArray(url: String): JSONArray? = request(url)?.let(::JSONArray)
-
-private fun request(url: String): String? = ksuApp.okhttpClient.newCall(
-    Request.Builder()
-        .url(url)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28")
-        .build()
-).execute().use { response ->
-    if (response.isSuccessful) response.body?.string() else null
-}
-
-internal object ManagerUpdateParser {
-    private val versionCodePattern = Regex("_(\\d+)(?:[-_]|\\.apk$)")
-
-    fun beta(releases: JSONArray): LatestVersionInfo {
-        var stableFallback: JSONObject? = null
-        for (index in 0 until releases.length()) {
-            val releaseJson = releases.optJSONObject(index) ?: continue
-            if (releaseJson.optBoolean("draft")) continue
-            if (releaseJson.optBoolean("prerelease")) return release(releaseJson)
-            if (stableFallback == null) stableFallback = releaseJson
-        }
-        return stableFallback?.let(::release) ?: LatestVersionInfo()
+        // sync with build.gradle.kts
+        const val CI_MANAGER_VERSION_CODE_OFFSET = 30000 + 700
+        const val SHORT_SHA_LENGTH = 7
+        const val UNIVERSAL_ABI = "universal"
     }
 
-    fun release(release: JSONObject): LatestVersionInfo {
-        val assets = release.optJSONArray("assets") ?: return LatestVersionInfo()
+    private val managerApkPattern = Regex(
+        "^KittiSU_(.+)_(\\d+)-(arm64-v8a|armeabi-v7a|x86_64|universal)-release\\.apk$",
+    )
+    private val commitCountLinkPattern = Regex("""[?&]page=(\d+)>; rel="last"""")
+
+    suspend fun checkStableUpdate(): ManagerUpdateInfo? = withContext(Dispatchers.IO) {
+        val supportedAbis = Build.SUPPORTED_ABIS.toList()
+        val release = requestJson("https://api.github.com/repos/$REPOSITORY/releases/latest")
+            ?: return@withContext null
+        val changelog = release.optString("body")
+        val assets = release.optJSONArray("assets") ?: return@withContext null
+        val candidates = mutableListOf<ManagerApkCandidate>()
+
         for (index in 0 until assets.length()) {
             val asset = assets.optJSONObject(index) ?: continue
-            val name = asset.optString("name")
-            if (!name.endsWith(".apk", ignoreCase = true) ||
-                name.contains("spoof", ignoreCase = true)
-            ) continue
-            val versionCode = versionCodePattern.find(name)?.groupValues?.get(1)?.toIntOrNull()
-                ?: continue
-            return LatestVersionInfo(
-                versionCode = versionCode,
-                downloadUrl = asset.optString("browser_download_url"),
-                changelog = release.optString("body"),
-                versionName = release.optString("tag_name"),
+            val parsed = parseApkName(asset.optString("name")) ?: continue
+            val downloadUrl = asset.optString("browser_download_url")
+            if (downloadUrl.isBlank()) continue
+
+            candidates += ManagerApkCandidate(
+                versionName = parsed.versionName,
+                versionCode = parsed.versionCode,
+                abi = parsed.abi,
+                fileName = parsed.fileName,
+                source = ManagerApkSource.DirectApk(downloadUrl),
             )
         }
-        return LatestVersionInfo()
+
+        return@withContext selectCandidate(candidates, supportedAbis)
+            ?.toUpdateInfo(ManagerUpdateChannel.STABLE, changelog)
     }
 
-    fun nightly(response: JSONObject, currentCommit: String): LatestVersionInfo {
-        val artifacts = response.optJSONArray("artifacts") ?: return LatestVersionInfo()
-        for (index in 0 until artifacts.length()) {
-            val artifact = artifacts.optJSONObject(index) ?: continue
-            val run = artifact.optJSONObject("workflow_run") ?: continue
-            val sha = run.optString("head_sha")
-            if (artifact.optBoolean("expired") || run.optString("head_branch") != "dev" ||
-                sha.isBlank()
-            ) continue
-            if (currentCommit.startsWith(sha) || sha.startsWith(currentCommit)) {
-                return LatestVersionInfo()
-            }
-            val id = artifact.optLong("id")
-            val runId = run.optLong("id")
-            if (id <= 0 || runId <= 0) continue
-            val shortSha = sha.take(7)
-            return LatestVersionInfo(
-                downloadUrl = "https://github.com/terebiko/KittiSU/actions/runs/$runId/artifacts/$id",
-                changelog = "Development build from commit `$shortSha`.",
-                versionName = "nightly-$shortSha",
-                commitSha = sha,
-            )
+    suspend fun checkBetaUpdate(): ManagerUpdateInfo? = withContext(Dispatchers.IO) {
+        val supportedAbis = Build.SUPPORTED_ABIS.toList()
+        val currentVersionCode = BuildConfig.VERSION_CODE
+        val workflowRuns = requestJson(
+            "https://api.github.com/repos/$REPOSITORY/actions/workflows/$WORKFLOW_FILE/runs" +
+                "?branch=$BRANCH&status=success&per_page=1&event=push",
+        )?.optJSONArray("workflow_runs") ?: return@withContext null
+        val run = workflowRuns.optJSONObject(0) ?: return@withContext null
+        val runId = run.optLong("id", -1L)
+        val headSha = run.optString("head_sha")
+        if (runId <= 0L || headSha.isBlank()) return@withContext null
+
+        val commitCount = requestCommitCount(headSha) ?: return@withContext null
+        val versionCode = CI_MANAGER_VERSION_CODE_OFFSET + commitCount
+        if (versionCode <= currentVersionCode) return@withContext null
+
+        val preferredAbi = supportedAbis.firstOrNull() ?: UNIVERSAL_ABI
+        return@withContext ManagerUpdateInfo(
+            channel = ManagerUpdateChannel.BETA,
+            versionCode = versionCode,
+            versionName = headSha.take(SHORT_SHA_LENGTH),
+            abi = preferredAbi,
+            fileName = "KittiSU_${headSha.take(SHORT_SHA_LENGTH)}_" +
+                "$versionCode-$preferredAbi-release.apk",
+            source = ManagerApkSource.NightlyArtifact(
+                url = "https://nightly.link/$REPOSITORY/actions/runs/$runId/$RELEASE_ARTIFACT.zip",
+                preferredAbi = preferredAbi,
+                expectedVersionCode = versionCode,
+            ),
+            changelog = run.optJSONObject("head_commit")?.optString("message").orEmpty(),
+        )
+    }
+
+    fun findNightlyApkEntry(
+        entries: List<ZipEntryMetadata>,
+        expectedVersionCode: Int,
+        preferredAbi: String,
+    ): ZipEntryMetadata? {
+        val candidates = entries.mapNotNull { entry ->
+            val parsed = parseApkName(entry.name.substringAfterLast('/')) ?: return@mapNotNull null
+            if (parsed.versionCode == expectedVersionCode) entry to parsed else null
         }
-        return LatestVersionInfo()
+
+        candidates.firstOrNull { (_, parsed) -> parsed.abi == preferredAbi }
+            ?.first
+            ?.let { return it }
+        return candidates.firstOrNull { (_, parsed) -> parsed.abi == UNIVERSAL_ABI }?.first
+    }
+
+    private suspend fun requestJson(url: String): JSONObject? = networkRequestRepository
+        .fetch(
+            url = url,
+            headers = GITHUB_HEADERS,
+            forceNetwork = true,
+            callTimeoutSeconds = UPDATE_CALL_TIMEOUT_SECONDS,
+        )
+        .onFailure { Log.w(TAG, "GitHub update request failed", it) }
+        .mapCatching { JSONObject(it) }
+        .getOrNull()
+
+    private suspend fun requestCommitCount(commitSha: String): Int? {
+        val url = "https://api.github.com/repos/$REPOSITORY/commits?sha=$commitSha&per_page=1"
+        val response = networkRequestRepository.request(
+            url = url,
+            headers = GITHUB_HEADERS,
+            forceNetwork = true,
+            callTimeoutSeconds = UPDATE_CALL_TIMEOUT_SECONDS,
+        ).getOrElse {
+            Log.w(TAG, "GitHub commit history request failed", it)
+            return null
+        }
+        return parseCommitCount(response.header("Link")) ?: 1
+    }
+
+    internal fun parseCommitCount(linkHeader: String?): Int? = commitCountLinkPattern.find(linkHeader.orEmpty())
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.toIntOrNull()
+
+    private fun parseApkName(fileName: String): ParsedApkName? {
+        val match = managerApkPattern.matchEntire(fileName) ?: return null
+        val versionCode = match.groupValues[2].toIntOrNull() ?: return null
+        return ParsedApkName(
+            versionName = match.groupValues[1],
+            versionCode = versionCode,
+            abi = match.groupValues[3],
+            fileName = fileName,
+        )
+    }
+
+    private fun selectCandidate(
+        candidates: List<ManagerApkCandidate>,
+        supportedAbis: List<String>,
+    ): ManagerApkCandidate? {
+        val latestVersionCode = candidates.maxOfOrNull { it.versionCode } ?: return null
+        if (latestVersionCode <= BuildConfig.VERSION_CODE) return null
+
+        val latestCandidates = candidates.filter { it.versionCode == latestVersionCode }
+        supportedAbis.forEach { abi ->
+            latestCandidates.firstOrNull { it.abi == abi }?.let { return it }
+        }
+        return latestCandidates.firstOrNull { it.abi == "universal" }
+    }
+
+    private data class ParsedApkName(
+        val versionName: String,
+        val versionCode: Int,
+        val abi: String,
+        val fileName: String,
+    )
+
+    private data class ManagerApkCandidate(
+        val versionName: String,
+        val versionCode: Int,
+        val abi: String,
+        val fileName: String,
+        val source: ManagerApkSource,
+    ) {
+        fun toUpdateInfo(
+            channel: ManagerUpdateChannel,
+            changelog: String = "",
+        ) = ManagerUpdateInfo(
+            channel = channel,
+            versionCode = versionCode,
+            versionName = versionName,
+            abi = abi,
+            fileName = fileName,
+            source = source,
+            changelog = changelog,
+        )
     }
 }

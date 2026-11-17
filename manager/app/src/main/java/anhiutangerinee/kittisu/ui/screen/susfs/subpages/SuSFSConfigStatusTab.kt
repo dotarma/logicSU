@@ -35,8 +35,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import anhiutangerinee.kittisu.R
-import anhiutangerinee.kittisu.data.susfs.SuSFSConfigHelper
-import anhiutangerinee.kittisu.data.susfs.SuSFSStatusInfo
+import anhiutangerinee.kittisu.domain.model.SuSFSStatusInfo
 import anhiutangerinee.kittisu.ui.component.WarningCard
 import anhiutangerinee.kittisu.ui.component.settings.SegmentedColumn
 import anhiutangerinee.kittisu.ui.component.settings.SettingsBaseWidget
@@ -45,7 +44,13 @@ import anhiutangerinee.kittisu.ui.component.settings.SettingsSwitchWidget
 import anhiutangerinee.kittisu.ui.screen.susfs.RegisterSuSFSRefresh
 import anhiutangerinee.kittisu.ui.screen.susfs.SuSFSRefreshRegistrar
 import anhiutangerinee.kittisu.ui.util.LocalSnackbarHost
+import anhiutangerinee.kittisu.ui.util.showReplacingSnackbar
+import anhiutangerinee.kittisu.ui.viewmodel.SuSFSUiAction
+import anhiutangerinee.kittisu.ui.viewmodel.SuSFSViewModel
+import anhiutangerinee.kittisu.ui.viewmodel.awaitSuSFSBoolean
+import anhiutangerinee.kittisu.ui.viewmodel.awaitSuSFSStatusInfo
 import kotlinx.coroutines.launch
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -58,10 +63,12 @@ fun StatusTab(
     onConfigEnabledChange: (Boolean) -> Unit,
     onConfigRestored: () -> Unit,
 ) {
+    val configHelper = koinViewModel<SuSFSViewModel>()
     var statusInfo by remember { mutableStateOf(SuSFSStatusInfo("", "", "")) }
 
     RegisterSuSFSRefresh(onRegisterRefresh) { _, forceRefresh ->
-        statusInfo = SuSFSConfigHelper.loadStatusInfo(forceRefresh)
+        statusInfo = awaitSuSFSStatusInfo(configHelper, forceRefresh)
+            ?: SuSFSStatusInfo("", "", "")
     }
 
     LazyColumn(
@@ -75,11 +82,11 @@ fun StatusTab(
 
         item {
             AnimatedVisibility(
-                visible = configEnabledLoaded && !configEnabled
+                visible = configEnabledLoaded && !configEnabled,
             ) {
                 WarningCard(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    message = stringResource(R.string.susfs_management_disabled_warning),
+                    message = stringResource(R.string.susfs_config_disable_warning),
                 )
             }
         }
@@ -89,8 +96,8 @@ fun StatusTab(
                 item {
                     SettingsSwitchWidget(
                         icon = Icons.TwoTone.Save,
-                        title = stringResource(R.string.susfs_standard_config_enabled),
-                        description = stringResource(R.string.susfs_standard_config_enabled_desc),
+                        title = stringResource(R.string.susfs_enable_config),
+                        description = stringResource(R.string.susfs_enable_config_summary),
                         checked = configEnabled,
                         enabled = configEnabledLoaded,
                         onCheckedChange = onConfigEnabledChange,
@@ -102,7 +109,7 @@ fun StatusTab(
                         title = stringResource(R.string.susfs_status_version),
                         description = statusInfo.version.ifBlank {
                             stringResource(R.string.susfs_status_no_data)
-                        }
+                        },
                     )
                 }
                 item {
@@ -111,7 +118,7 @@ fun StatusTab(
                         title = stringResource(R.string.susfs_status_variant),
                         description = statusInfo.variant.ifBlank {
                             stringResource(R.string.susfs_status_no_data)
-                        }
+                        },
                     )
                 }
                 item {
@@ -120,7 +127,7 @@ fun StatusTab(
                         title = stringResource(R.string.susfs_status_enabled_features),
                         description = statusInfo.enabledFeatures.ifBlank {
                             stringResource(R.string.susfs_status_no_data)
-                        }
+                        },
                     )
                 }
             }
@@ -136,12 +143,12 @@ fun StatusTab(
     }
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackupRestoreSection(
     onConfigRestored: () -> Unit,
 ) {
+    val configHelper = koinViewModel<SuSFSViewModel>()
     val snackbarHost = LocalSnackbarHost.current
     val scope = rememberCoroutineScope()
 
@@ -160,26 +167,27 @@ fun BackupRestoreSection(
     val restoreDefaultDesc = stringResource(R.string.susfs_backup_restore_default_desc)
     val confirmTitle = stringResource(R.string.susfs_backup_import_confirm_title)
     val confirmMsg = stringResource(R.string.susfs_backup_import_confirm_message)
-    val defaultFilename = stringResource(R.string.susfs_backup_default_filename)
     val importLabel = stringResource(R.string.susfs_backup_import_label)
     val cancelLabel = stringResource(R.string.susfs_entry_cancel)
     val operationSuccessMsg = stringResource(R.string.susfs_operation_success)
     val operationFailedMsg = stringResource(R.string.susfs_operation_failed)
 
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("application/json"),
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val ok = SuSFSConfigHelper.exportConfigToUri(uri)
+            val ok = awaitSuSFSBoolean(configHelper) { reply ->
+                SuSFSUiAction.ExportConfig(uri.toString(), reply)
+            }
             scope.launch {
-                snackbarHost.showSnackbar(if (ok) exportSuccessMsg else exportFailedMsg)
+                snackbarHost.showReplacingSnackbar(if (ok) exportSuccessMsg else exportFailedMsg)
             }
         }
     }
 
     val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         pendingImportUri = uri
@@ -193,8 +201,8 @@ fun BackupRestoreSection(
                 title = exportTitle,
                 description = exportDesc,
                 onClick = {
-                    exportLauncher.launch(defaultFilename)
-                }
+                    exportLauncher.launch("susfs_backup.json")
+                },
             )
         }
         item {
@@ -204,7 +212,7 @@ fun BackupRestoreSection(
                 description = importDesc,
                 onClick = {
                     importLauncher.launch(arrayOf("application/json"))
-                }
+                },
             )
         }
         item {
@@ -235,16 +243,18 @@ fun BackupRestoreSection(
                         pendingImportUri = null
                         if (uri != null) {
                             scope.launch {
-                                val ok = SuSFSConfigHelper.importConfigFromUri(uri)
+                                val ok = awaitSuSFSBoolean(configHelper) { reply ->
+                                    SuSFSUiAction.ImportConfig(uri.toString(), reply)
+                                }
                                 if (ok) {
                                     onConfigRestored()
                                 }
                                 scope.launch {
-                                    snackbarHost.showSnackbar(if (ok) importSuccessMsg else importFailedMsg)
+                                    snackbarHost.showReplacingSnackbar(if (ok) importSuccessMsg else importFailedMsg)
                                 }
                             }
                         }
-                    }
+                    },
                 ) {
                     Text(importLabel)
                 }
@@ -270,6 +280,7 @@ private fun RestoreDefaultRow(
     operationFailedMsg: String,
     onConfigRestored: () -> Unit,
 ) {
+    val configHelper = koinViewModel<SuSFSViewModel>()
     val scope = rememberCoroutineScope()
     SettingsJumpPageWidget(
         icon = Icons.TwoTone.RestartAlt,
@@ -277,12 +288,14 @@ private fun RestoreDefaultRow(
         description = description,
         onClick = {
             scope.launch {
-                val ok = SuSFSConfigHelper.restoreDefaultConfig()
+                val ok = awaitSuSFSBoolean(configHelper) { reply ->
+                    SuSFSUiAction.RestoreDefault(reply)
+                }
                 if (ok) {
                     onConfigRestored()
                 }
-                snackbarHost.showSnackbar(if (ok) operationSuccessMsg else operationFailedMsg)
+                snackbarHost.showReplacingSnackbar(if (ok) operationSuccessMsg else operationFailedMsg)
             }
-        }
+        },
     )
 }

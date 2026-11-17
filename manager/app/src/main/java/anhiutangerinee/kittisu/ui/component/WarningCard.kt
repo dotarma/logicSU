@@ -2,27 +2,19 @@ package anhiutangerinee.kittisu.ui.component
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.twotone.Close
-import androidx.compose.material.icons.twotone.Error
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,37 +23,39 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import anhiutangerinee.kittisu.ui.theme.CardConfig
-import anhiutangerinee.kittisu.ui.theme.getCardElevation
+import anhiutangerinee.kittisu.ui.component.settings.LocalSegmentedItemShape
+import anhiutangerinee.kittisu.ui.component.settings.SettingsBaseWidget
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun WarningCard(
     modifier: Modifier = Modifier,
+    renderBackground: Boolean = true,
     shape: Shape = RoundedCornerShape(16.dp),
     message: String,
-    content: (@Composable () -> Unit) = {},
     color: Color? = null,
     onClick: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
-    icon: (@Composable () -> Unit)? = null
+    icon: (@Composable () -> Unit)? = null,
+    content: (@Composable () -> Unit) = {},
 ) {
     WarningCardInner(
         modifier = modifier,
+        renderBackground = renderBackground,
         shape = shape,
         content = {
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMediumEmphasized,
                 modifier = Modifier
-                    .wrapContentHeight(Alignment.CenterVertically)
+                    .wrapContentHeight(Alignment.CenterVertically),
             )
         },
         color = color,
         end = content,
         onClick = onClick,
         onClose = onClose,
-        icon = icon
+        icon = icon,
     )
 }
 
@@ -69,30 +63,32 @@ fun WarningCard(
 @Composable
 fun WarningCard(
     modifier: Modifier = Modifier,
+    renderBackground: Boolean = true,
     shape: Shape = RoundedCornerShape(16.dp),
     message: AnnotatedString,
-    content: (@Composable () -> Unit) = {},
     color: Color? = null,
     onClick: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
-    icon: (@Composable () -> Unit)? = null
+    icon: (@Composable () -> Unit)? = null,
+    content: (@Composable () -> Unit) = {},
 ) {
     WarningCardInner(
         modifier = modifier,
+        renderBackground = renderBackground,
         shape = shape,
         content = {
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMediumEmphasized,
                 modifier = Modifier
-                    .wrapContentHeight(Alignment.CenterVertically)
+                    .wrapContentHeight(Alignment.CenterVertically),
             )
         },
         color = color,
         end = content,
         onClick = onClick,
         onClose = onClose,
-        icon = icon
+        icon = icon,
     )
 }
 
@@ -100,92 +96,48 @@ fun WarningCard(
 @Composable
 private fun WarningCardInner(
     modifier: Modifier = Modifier,
+    renderBackground: Boolean = true,
     shape: Shape = CardDefaults.elevatedShape,
-    content: (@Composable () -> Unit),
     end: (@Composable () -> Unit),
     color: Color? = null,
     onClick: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
-    icon: (@Composable () -> Unit)? = null
+    icon: (@Composable () -> Unit)? = null,
+    content: (@Composable () -> Unit),
 ) {
-    val cardColors = when (color) {
-        null -> {
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer.copy(
-                    alpha = CardConfig.cardAlpha
-                ),
-                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                disabledContainerColor = MaterialTheme.colorScheme.errorContainer.copy(
-                    alpha = CardConfig.cardAlpha
-                ),
-                disabledContentColor = MaterialTheme.colorScheme.onErrorContainer
-            )
-        }
-
-        else -> {
-            CardDefaults.cardColors(
-                containerColor = color,
-                contentColor = contentColorFor(color),
-                disabledContainerColor = color,
-                disabledContentColor = contentColorFor(color)
-            )
-        }
-    }
-
-    ElevatedCard(
-        modifier = modifier,
-        shape = shape,
-        colors = cardColors,
-        elevation = getCardElevation(),
+    CompositionLocalProvider(
+        LocalSegmentedItemShape provides shape,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(onClick?.let { Modifier.clickable { it() } } ?: Modifier)
-                .padding(20.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.CenterStart)
-                    .padding(end = 40.dp)
-            ) {
-                if (icon != null) {
-                    icon()
-                } else {
+        SettingsBaseWidget(
+            modifier = modifier,
+            title = null,
+            isOnBackground = renderBackground,
+            containerColor = color ?: MaterialTheme.colorScheme.errorContainer,
+            leadingContent = icon,
+            foreContent = {
+                content()
+            },
+            trailingContent = {
+                onClose?.let {
                     Icon(
-                        imageVector = Icons.TwoTone.Error,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.TwoTone.Close,
+                        contentDescription = stringResource(android.R.string.cancel),
+                        modifier = Modifier
+                            .clickable {
+                                onClose()
+                            }
+                            .size(18.dp)
+                            .align(Alignment.TopEnd),
                     )
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
-
-                content()
-            }
-
-
-            if (onClose != null) {
-                Icon(
-                    imageVector = Icons.TwoTone.Close,
-                    contentDescription = stringResource(android.R.string.cancel),
-                    modifier = Modifier
-                        .clickable {
-                            onClose()
-                        }
-                        .size(18.dp)
-                        .align(Alignment.TopEnd)
-                )
-            }
-
-            Box(
-                modifier = Modifier.align(Alignment.TopEnd)
-            ) {
                 end()
-            }
-        }
+            },
+            iconPlaceholder = false,
+            onClick = {
+                onClick?.invoke()
+            },
+        )
     }
 }
 
@@ -198,6 +150,7 @@ private fun WarningCardPreview() {
         WarningCard(
             message = "Warning message ",
             color = MaterialTheme.colorScheme.outlineVariant,
-        ) {}
+            icon = {},
+        )
     }
 }

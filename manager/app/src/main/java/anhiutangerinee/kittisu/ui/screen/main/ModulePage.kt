@@ -2,13 +2,11 @@ package anhiutangerinee.kittisu.ui.screen.main
 
 import android.annotation.SuppressLint
 import android.app.Activity.CLIPBOARD_SERVICE
-import android.app.Activity.MODE_PRIVATE
 import android.app.Activity.RESULT_OK
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -21,6 +19,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -29,16 +28,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -47,50 +41,49 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.twotone.Wysiwyg
 import androidx.compose.material.icons.automirrored.twotone.Undo
+import androidx.compose.material.icons.automirrored.twotone.Wysiwyg
 import androidx.compose.material.icons.twotone.Check
 import androidx.compose.material.icons.twotone.ChevronRight
 import androidx.compose.material.icons.twotone.Close
-import androidx.compose.material.icons.twotone.MoreVert
 import androidx.compose.material.icons.twotone.Cloud
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.Download
 import androidx.compose.material.icons.twotone.Extension
-import androidx.compose.material.icons.twotone.Link
+import androidx.compose.material.icons.twotone.MoreVert
 import androidx.compose.material.icons.twotone.PlayArrow
 import androidx.compose.material.icons.twotone.Refresh
 import androidx.compose.material.icons.twotone.Warning
-import androidx.compose.material.icons.twotone.Photo
-import androidx.compose.material.icons.twotone.Restore
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CheckableDropdownMenuItem
+import androidx.compose.material3.DropdownMenuGroup
+import androidx.compose.material3.DropdownMenuPopup
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -110,7 +103,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.FixedScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -123,58 +115,67 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.content.edit
-import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kyant.capsule.ContinuousRoundedRectangle
-import anhiutangerinee.kittisu.Natives
 import anhiutangerinee.kittisu.R
-import anhiutangerinee.kittisu.ksuApp
+import anhiutangerinee.kittisu.data.settings.SettingsPlatformRepository
+import anhiutangerinee.kittisu.domain.model.DocumentFormat
+import anhiutangerinee.kittisu.domain.model.DocumentPolicy
+import anhiutangerinee.kittisu.domain.model.InstalledModule
+import anhiutangerinee.kittisu.domain.model.MetaModuleStatus
+import anhiutangerinee.kittisu.domain.model.ModuleReadme
+import anhiutangerinee.kittisu.domain.model.ModuleUpdateVerification
+import anhiutangerinee.kittisu.domain.usecase.EnqueueDownloadUseCase
+import anhiutangerinee.kittisu.domain.usecase.ExtractModuleNameUseCase
+import anhiutangerinee.kittisu.domain.usecase.IsModuleUriAccessibleUseCase
+import anhiutangerinee.kittisu.domain.usecase.ObserveDownloadUseCase
+import anhiutangerinee.kittisu.domain.usecase.PeekOneshotScriptUseCase
+import anhiutangerinee.kittisu.domain.usecase.TakeModuleUriPermissionUseCase
 import anhiutangerinee.kittisu.ui.component.ConfirmResult
 import anhiutangerinee.kittisu.ui.component.InstallConfirmationDialog
 import anhiutangerinee.kittisu.ui.component.SearchAppBar
 import anhiutangerinee.kittisu.ui.component.SwipeableSnackbarHost
 import anhiutangerinee.kittisu.ui.component.WarningCard
-import anhiutangerinee.kittisu.ui.component.ZipFileDetector.parseModuleInfo
+import anhiutangerinee.kittisu.ui.component.ZipFileDetector
 import anhiutangerinee.kittisu.ui.component.ZipFileInfo
 import anhiutangerinee.kittisu.ui.component.ZipType
 import anhiutangerinee.kittisu.ui.component.rememberConfirmDialog
 import anhiutangerinee.kittisu.ui.component.rememberLoadingDialog
+import anhiutangerinee.kittisu.ui.component.rememberSearchAppBarScrollBehavior
 import anhiutangerinee.kittisu.ui.component.settings.SegmentedColumn
 import anhiutangerinee.kittisu.ui.component.settings.SettingsBaseWidget
 import anhiutangerinee.kittisu.ui.component.settings.SettingsJumpPageWidget
 import anhiutangerinee.kittisu.ui.component.settings.SettingsTextFieldWidget
-import anhiutangerinee.kittisu.ui.navigation.DeepLinkResolver
 import anhiutangerinee.kittisu.ui.navigation.LocalNavigator
 import anhiutangerinee.kittisu.ui.navigation.Route
-import anhiutangerinee.kittisu.ui.screen.FlashIt
 import anhiutangerinee.kittisu.ui.screen.LabelText
 import anhiutangerinee.kittisu.ui.theme.CardConfig
+import anhiutangerinee.kittisu.ui.theme.ThemeConfig
 import anhiutangerinee.kittisu.ui.theme.blurSource
+import anhiutangerinee.kittisu.ui.theme.renderBackgroundBlur
 import anhiutangerinee.kittisu.ui.util.LocalPermissionRequestInterface
 import anhiutangerinee.kittisu.ui.util.LocalSnackbarHost
+import anhiutangerinee.kittisu.ui.util.Shortcut
+import anhiutangerinee.kittisu.ui.util.adaptiveScaffoldWindowInsets
 import anhiutangerinee.kittisu.ui.util.downloader.download
-import anhiutangerinee.kittisu.ui.util.hasMagisk
-import anhiutangerinee.kittisu.ui.util.module.ModuleUtils
-import anhiutangerinee.kittisu.ui.util.module.Shortcut
-import anhiutangerinee.kittisu.ui.util.reboot
-import anhiutangerinee.kittisu.ui.util.toggleModule
-import anhiutangerinee.kittisu.ui.util.undoUninstallModule
-import anhiutangerinee.kittisu.ui.util.uninstallModule
+import anhiutangerinee.kittisu.ui.util.downloader.downloadFailureMessage
+import anhiutangerinee.kittisu.ui.util.showReplacingSnackbar
+import anhiutangerinee.kittisu.ui.viewmodel.HomeViewModel
+import anhiutangerinee.kittisu.ui.viewmodel.ModuleUiAction
+import anhiutangerinee.kittisu.ui.viewmodel.ModuleUiEvent
+import anhiutangerinee.kittisu.ui.viewmodel.ModuleUiState
 import anhiutangerinee.kittisu.ui.viewmodel.ModuleViewModel
 import anhiutangerinee.kittisu.ui.webui.WebUIActivity
-import com.topjohnwu.superuser.io.SuFile
+import com.kyant.capsule.ContinuousRoundedRectangle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
-private enum class ShortcutType {
+enum class ShortcutType {
     Action,
-    WebUI
+    WebUI,
 }
 
 /**
@@ -182,23 +183,24 @@ private enum class ShortcutType {
  * @date 2025/9/29.
  */
 @SuppressLint("ResourceType", "AutoboxingStateCreation")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ModulePage(bottomPadding: Dp) {
+    val isModuleUriAccessible = koinInject<IsModuleUriAccessibleUseCase>()
+    val takeModuleUriPermission = koinInject<TakeModuleUriPermissionUseCase>()
+    val extractModuleName = koinInject<ExtractModuleNameUseCase>()
+    val zipFileDetector = koinInject<ZipFileDetector>()
+    val peekScript = koinInject<PeekOneshotScriptUseCase>()
     val navigator = LocalNavigator.current
     val context = LocalContext.current
-    val viewModel = viewModel<ModuleViewModel>(
-        viewModelStoreOwner = ksuApp
-    )
-    val prefs = context.getSharedPreferences("settings", MODE_PRIVATE)
+    val viewModel = koinViewModel<ModuleViewModel>()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val homeState by koinViewModel<HomeViewModel>().uiState.collectAsStateWithLifecycle()
     val snackBarHost = LocalSnackbarHost.current
     val scope = rememberCoroutineScope()
     var lastClickTime by remember { mutableStateOf(0L) }
 
-    val bottomSheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true
-    )
-    var showBottomSheet by remember { mutableStateOf(false) }
+    var showDropdown by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     var showConfirmationDialog by remember { mutableStateOf(false) }
@@ -209,20 +211,21 @@ fun ModulePage(bottomPadding: Dp) {
         onConfirm = { info ->
             showConfirmationDialog = false
             navigator.push(
-                Route.Flash(
-                    FlashIt.FlashModules(ArrayList(info.filter { it.type == ZipType.MODULE }.map { it.uri }))
-                )
+                Route.Flash.modules(
+                    info.filter { it.type == ZipType.MODULE }
+                        .map { it.uri.toString() },
+                ),
             )
-            viewModel.markNeedRefresh()
+            viewModel.dispatch(ModuleUiAction.MarkNeedRefresh)
         },
         onDismiss = {
             showConfirmationDialog = false
             pendingZipFiles = emptyList()
-        }
+        },
     )
 
     val selectZipLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
+        contract = ActivityResultContracts.StartActivityForResult(),
     ) {
         if (it.resultCode != RESULT_OK) {
             return@rememberLauncherForActivityResult
@@ -236,13 +239,15 @@ fun ModulePage(bottomPadding: Dp) {
                 val selectedModules = mutableListOf<Uri>()
                 val selectedModuleNames = mutableMapOf<Uri, String>()
 
-                fun processUri(uri: Uri) {
+                suspend fun processUri(uri: Uri) {
                     try {
-                        if (!ModuleUtils.isUriAccessible(context, uri)) {
+                        val uriString = uri.toString()
+                        if (!isModuleUriAccessible(uriString)) {
                             return
                         }
-                        ModuleUtils.takePersistableUriPermission(context, uri)
-                        val moduleName = ModuleUtils.extractModuleName(context, uri)
+                        takeModuleUriPermission(uriString)
+                        val moduleName =
+                            withContext(Dispatchers.IO) { extractModuleName(uriString) }
                         selectedModules.add(uri)
                         selectedModuleNames[uri] = moduleName
                     } catch (e: Exception) {
@@ -256,11 +261,19 @@ fun ModulePage(bottomPadding: Dp) {
                 }
 
                 if (selectedModules.isEmpty()) {
-                    snackBarHost.showSnackbar("Unable to access selected module files")
+                    snackBarHost.showReplacingSnackbar("Unable to access selected module files")
                     return@launch
                 }
+                selectedModules.singleOrNull()?.let { uri ->
+                    peekScript(uri.toString())?.let { manifest ->
+                        navigator.push(Route.ScriptRun(uri.toString(), offerInstall = true, displayName = manifest.name))
+                        return@launch
+                    }
+                }
                 selectedModules.forEach { it ->
-                    zipFiles.add(parseModuleInfo(context, it))
+                    val info =
+                        withContext(Dispatchers.IO) { zipFileDetector.parseModuleInfo(context, it) }
+                    zipFiles.add(info)
                 }
                 pendingZipFiles = zipFiles
 
@@ -269,54 +282,74 @@ fun ModulePage(bottomPadding: Dp) {
                 val uri = data.data ?: return@launch
                 // 单个安装模块
                 try {
-                    if (!ModuleUtils.isUriAccessible(context, uri)) {
-                        snackBarHost.showSnackbar("Unable to access selected module files")
+                    val uriString = uri.toString()
+                    if (!isModuleUriAccessible(uriString)) {
+                        snackBarHost.showReplacingSnackbar("Unable to access selected module files")
                         return@launch
                     }
 
-                    ModuleUtils.takePersistableUriPermission(context, uri)
+                    takeModuleUriPermission(uriString)
 
-                    zipFiles.add(parseModuleInfo(context, uri))
+                    peekScript(uriString)?.let { manifest ->
+                        navigator.push(Route.ScriptRun(uriString, offerInstall = true, displayName = manifest.name))
+                        return@launch
+                    }
+
+                    val info = withContext(Dispatchers.IO) {
+                        zipFileDetector.parseModuleInfo(
+                            context,
+                            uri,
+                        )
+                    }
+                    zipFiles.add(info)
                     pendingZipFiles = zipFiles
 
                     showConfirmationDialog = true
                 } catch (e: Exception) {
                     Log.e("ModuleScreen", "Error processing a single URI: $uri, Error: ${e.message}")
-                    snackBarHost.showSnackbar("Error processing module file: ${e.message}")
+                    snackBarHost.showReplacingSnackbar("Error processing module file: ${e.message}")
                 }
             }
         }
     }
 
     LaunchedEffect(Unit) {
-        viewModel.search = ""
-        viewModel.sortEnabledFirst = prefs.getBoolean("module_sort_enabled_first", false)
-        viewModel.sortActionFirst = prefs.getBoolean("module_sort_action_first", false)
-        if (viewModel.moduleList.isEmpty() || viewModel.isNeedRefresh) {
-            viewModel.fetchModuleList()
+        viewModel.dispatch(ModuleUiAction.Search(""))
+        if (uiState.moduleList.isEmpty() || uiState.isNeedRefresh) {
+            viewModel.dispatch(ModuleUiAction.Refresh())
         }
     }
 
-    val isSafeMode = Natives.isSafeMode
-    val hasMagisk = hasMagisk()
-    val hideInstallButton = isSafeMode || hasMagisk
+    val isSafeMode = homeState.systemStatus.isSafeMode
+    val hideInstallButton = isSafeMode || uiState.hasMagisk
 
     val topAppBarState = rememberTopAppBarState()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState)
+    val scrollBehavior = rememberSearchAppBarScrollBehavior(
+        TopAppBarDefaults.exitUntilCollapsedScrollBehavior(topAppBarState),
+    )
 
     Scaffold(
         topBar = {
             SearchAppBar(
                 title = stringResource(R.string.module),
-                searchText = viewModel.search,
-                onSearchTextChange = { viewModel.search = it },
+                searchText = uiState.search,
+                onSearchTextChange = { query ->
+                    viewModel.dispatch(ModuleUiAction.Search(query))
+                },
                 dropdownContent = {
                     IconButton(
-                        onClick = { showBottomSheet = true },
+                        onClick = { showDropdown = true },
                     ) {
                         Icon(
                             imageVector = Icons.TwoTone.MoreVert,
                             contentDescription = stringResource(id = R.string.settings),
+                        )
+
+                        ModuleDropdown(
+                            expanded = showDropdown,
+                            onDismissRequest = { showDropdown = false },
+                            viewModel = viewModel,
+                            uiState = uiState,
                         )
                     }
                 },
@@ -324,7 +357,7 @@ fun ModulePage(bottomPadding: Dp) {
                     IconButton(
                         onClick = {
                             navigator.push(Route.ModuleRepo)
-                        }
+                        },
                     ) {
                         Icon(
                             imageVector = Icons.TwoTone.Cloud,
@@ -348,46 +381,44 @@ fun ModulePage(bottomPadding: Dp) {
                         Intent(Intent.ACTION_GET_CONTENT).apply {
                             type = "application/zip"
                             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                        }
+                        },
                     )
                 },
                 content = {
                     Icon(
                         painter = painterResource(id = R.drawable.package_import),
-                        contentDescription = null
+                        contentDescription = null,
                     )
-                }
+                },
             )
         },
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        contentWindowInsets = WindowInsets.safeDrawing.only(
-            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
-        ),
+        contentWindowInsets = adaptiveScaffoldWindowInsets(includeBottom = false),
         snackbarHost = {
             SwipeableSnackbarHost(
-                hostState = snackBarHost
+                hostState = snackBarHost,
             )
-        }
+        },
     ) { innerPadding ->
         when {
-            hasMagisk -> {
+            uiState.hasMagisk -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         Icon(
                             imageVector = Icons.TwoTone.Warning,
                             contentDescription = null,
                             modifier = Modifier
                                 .size(64.dp)
-                                .padding(bottom = 16.dp)
+                                .padding(bottom = 16.dp),
                         )
                         Text(
                             stringResource(R.string.module_magisk_conflict),
@@ -397,41 +428,49 @@ fun ModulePage(bottomPadding: Dp) {
                     }
                 }
             }
-            viewModel.moduleList.isEmpty() -> {
+
+            uiState.moduleList.isEmpty() -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         Icon(
                             imageVector = Icons.TwoTone.Extension,
                             contentDescription = null,
                             modifier = Modifier
                                 .size(96.dp)
-                                .padding(bottom = 16.dp)
+                                .padding(bottom = 16.dp),
                         )
                         Text(
-                            text = stringResource(R.string.module_empty),
+                            text =
+                                if (uiState.search.isNotEmpty()) {
+                                    stringResource(R.string.search_no_any_match)
+                                } else {
+                                    stringResource(R.string.module_empty)
+                                },
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     }
                 }
             }
+
             else -> {
                 ModuleList(
                     viewModel = viewModel,
+                    uiState = uiState,
                     listState = listState,
                     modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
                     onUpdateModule = {
-                        navigator.push(Route.Flash(FlashIt.FlashModuleUpdate(it)))
+                        navigator.push(Route.Flash.moduleUpdate(it.toString()))
                     },
-                    onClickModule = { id, name, hasWebUi ->
+                    onClickModule = { id, hasWebUi ->
                         val currentTime = System.currentTimeMillis()
                         if (currentTime - lastClickTime < 600) {
                             Log.d("ModuleScreen", "Click too fast, ignoring")
@@ -443,14 +482,18 @@ fun ModulePage(bottomPadding: Dp) {
                             try {
                                 context.startActivity(
                                     Intent(context, WebUIActivity::class.java)
-                                    .setData("kernelsu://webui/$id".toUri())
-                                    .putExtra("id", id)
-                                        .putExtra("name", name)
+                                        .setData(
+                                            Uri.Builder()
+                                                .scheme("kernelsu")
+                                                .authority("webui")
+                                                .appendQueryParameter("id", id)
+                                                .build(),
+                                        ),
                                 )
                             } catch (e: Exception) {
                                 Log.e("ModuleScreen", "Error launching WebUI: ${e.message}", e)
                                 scope.launch {
-                                    snackBarHost.showSnackbar("Error launching WebUI: ${e.message}")
+                                    snackBarHost.showReplacingSnackbar("Error launching WebUI: ${e.message}")
                                 }
                             }
                             return@ModuleList
@@ -463,193 +506,82 @@ fun ModulePage(bottomPadding: Dp) {
                 )
             }
         }
-
-        if (showBottomSheet) {
-            ModalBottomSheet(
-                onDismissRequest = {
-                    showBottomSheet = false
-                },
-                sheetState = bottomSheetState,
-                dragHandle = {
-                    Surface(
-                        modifier = Modifier.padding(vertical = 11.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Box(
-                            Modifier.size(
-                                width = 32.dp,
-                                height = 4.dp
-                            )
-                        )
-                    }
-                }
-            ) {
-                ModuleBottomSheetContent(
-                    viewModel = viewModel,
-                    prefs = prefs
-                )
-            }
-        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ModuleBottomSheetContent(
+private fun ModuleDropdown(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
     viewModel: ModuleViewModel,
-    prefs: android.content.SharedPreferences
+    uiState: ModuleUiState,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 24.dp)
+    DropdownMenuPopup(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
     ) {
-        // 标题
-        Text(
-            text = stringResource(R.string.menu_options),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
-        )
-
-        // 排序选项
-
-        Text(
-            text = stringResource(R.string.sort_options),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
-        )
-
-        Column(
-            modifier = Modifier.padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        DropdownMenuGroup(
+            shapes = MenuDefaults.groupShapes(),
         ) {
-            // 优先显示有操作的模块
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.module_sort_action_first),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Switch(
-                    checked = viewModel.sortActionFirst,
-                    onCheckedChange = { checked ->
-                        viewModel.sortActionFirst = checked
-                        prefs.edit {
-                            putBoolean("module_sort_action_first", checked)
-                        }
-                    },
-                    thumbContent = {
-                        if (viewModel.sortActionFirst) {
-                            Icon(
-                                imageVector = Icons.TwoTone.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(SwitchDefaults.IconSize),
-                            )
-                        } else
-                        {
-                            Icon(
-                                imageVector = Icons.TwoTone.Close,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                modifier = Modifier.size(SwitchDefaults.IconSize),
-                            )
-                        }
-                    }
-                )
-            }
-
-            // 优先显示已启用的模块
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.module_sort_enabled_first),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Switch(
-                    checked = viewModel.sortEnabledFirst,
-                    onCheckedChange = { checked ->
-                        viewModel.sortEnabledFirst = checked
-                        prefs.edit {
-                            putBoolean("module_sort_enabled_first", checked)
-                        }
-                    },
-                    thumbContent = {
-                        if (viewModel.sortEnabledFirst) {
-                            Icon(
-                                imageVector = Icons.TwoTone.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(SwitchDefaults.IconSize),
-                            )
-                        } else
-                        {
-                            Icon(
-                                imageVector = Icons.TwoTone.Close,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                modifier = Modifier.size(SwitchDefaults.IconSize),
-                            )
-                        }
-                    }
-                )
-            }
+            CheckableDropdownMenuItem(
+                checked = uiState.sortActionFirst,
+                onCheckedChange = {
+                    viewModel.dispatch(
+                        ModuleUiAction.Sort(uiState.sortEnabledFirst, it),
+                    )
+                },
+                text = { Text(stringResource(R.string.module_sort_action_first)) },
+                shapes = MenuDefaults.itemShape(
+                    index = 0,
+                    count = 2,
+                ),
+            )
+            CheckableDropdownMenuItem(
+                checked = uiState.sortEnabledFirst,
+                onCheckedChange = {
+                    viewModel.dispatch(
+                        ModuleUiAction.Sort(it, uiState.sortActionFirst),
+                    )
+                },
+                text = { Text(stringResource(R.string.module_sort_enabled_first)) },
+                shapes = MenuDefaults.itemShape(
+                    index = 1,
+                    count = 2,
+                ),
+            )
         }
     }
 }
-
-var showMetamoduleWarning by mutableStateOf(true)
 
 private fun getMetaModuleWarningText(
-    viewModel: ModuleViewModel,
-    context: Context
-) : String? {
-    if (!showMetamoduleWarning) return null
-    if (!viewModel.hasModuleRequireMount) return null
+    hasModuleRequireMount: Boolean,
+    showWarning: Boolean,
+    context: Context,
+    status: MetaModuleStatus,
+): String? {
+    if (!showWarning) return null
+    if (!hasModuleRequireMount) return null
 
-    val metaProp = SuFile.open("/data/adb/metamodule/module.prop").exists()
-    val metaRemoved = SuFile.open("/data/adb/metamodule/remove").exists()
-    val metaDisabled = SuFile.open("/data/adb/metamodule/disable").exists()
-
-    return when {
-        !metaProp ->
-            context.getString(R.string.no_meta_module_installed)
-
-        metaProp && metaRemoved ->
-            context.getString(R.string.meta_module_removed)
-
-        metaProp && metaDisabled ->
-            context.getString(R.string.meta_module_disabled)
-
-        else -> null
-    }
+    return status.resId?.let { context.getString(it) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MetaModuleWarningCard(
-    text: String
+    text: String,
+    visible: Boolean,
+    onClose: () -> Unit,
 ) {
     AnimatedVisibility(
-        visible = showMetamoduleWarning,
+        visible = visible,
         enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically()
+        exit = fadeOut() + shrinkVertically(),
     ) {
         WarningCard(
             shape = CardDefaults.elevatedShape,
             message = text,
-            onClose = {
-                showMetamoduleWarning = false
-            }
+            onClose = onClose,
         )
 
         Spacer(Modifier.height(8.dp))
@@ -660,17 +592,24 @@ private fun MetaModuleWarningCard(
 @Composable
 private fun ModuleList(
     viewModel: ModuleViewModel,
+    uiState: ModuleUiState,
     listState: LazyListState,
     modifier: Modifier = Modifier,
     boxModifier: Modifier = Modifier,
     onUpdateModule: (Uri) -> Unit,
-    onClickModule: (id: String, name: String, hasWebUi: Boolean) -> Unit,
+    onClickModule: (id: String, hasWebUi: Boolean) -> Unit,
     context: Context,
     snackBarHost: SnackbarHostState,
-    bottomPadding : Dp,
-    topPadding : Dp,
+    bottomPadding: Dp,
+    topPadding: Dp,
 ) {
+    val shortcut = koinInject<Shortcut>()
+    val settings = koinInject<SettingsPlatformRepository>()
+    var showMetaModuleWarning by rememberSaveable { mutableStateOf(true) }
+    val enqueueDownload = koinInject<EnqueueDownloadUseCase>()
+    val observeDownload = koinInject<ObserveDownloadUseCase>()
     val permissionRequestInterface = LocalPermissionRequestInterface.current
+    val scope = rememberCoroutineScope()
     val pullRefreshState = rememberPullToRefreshState()
     val failedEnable = stringResource(R.string.module_failed_to_enable)
     val failedDisable = stringResource(R.string.module_failed_to_disable)
@@ -687,7 +626,58 @@ private fun ModuleList(
     val changelogText = stringResource(R.string.module_changelog)
     val downloadingText = stringResource(R.string.module_downloading)
     val startDownloadingText = stringResource(R.string.module_start_downloading)
-    val fetchChangeLogFailed = stringResource(R.string.module_changelog_failed)
+
+    LaunchedEffect(viewModel) {
+        viewModel.events.collectLatest { event ->
+            when (event) {
+                is ModuleUiEvent.EnabledChanged -> {
+                    val moduleName = uiState.moduleList
+                        .find { it.dirId == event.moduleId }
+                        ?.name ?: event.moduleId
+                    if (event.successful) {
+                        val result = snackBarHost.showReplacingSnackbar(
+                            message = rebootToApply,
+                            actionLabel = reboot,
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.dispatch(ModuleUiAction.Reboot)
+                        }
+                    } else {
+                        val message = if (event.enabled) failedEnable else failedDisable
+                        snackBarHost.showReplacingSnackbar(message.format(moduleName))
+                    }
+                }
+
+                is ModuleUiEvent.RemovedChanged -> {
+                    val moduleName = uiState.moduleList
+                        .find { it.dirId == event.moduleId }
+                        ?.name ?: event.moduleId
+                    if (event.successful) {
+                        viewModel.dispatch(ModuleUiAction.MarkNeedRefresh)
+                        viewModel.dispatch(ModuleUiAction.Refresh())
+                    }
+                    if (event.removed) {
+                        val message = if (event.successful) successUninstall else failedUninstall
+                        val result = snackBarHost.showReplacingSnackbar(
+                            message = message.format(moduleName),
+                            actionLabel = reboot.takeIf { event.successful },
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.dispatch(ModuleUiAction.Reboot)
+                        }
+                    }
+                }
+
+                is ModuleUiEvent.Error -> if (event.message.isNotBlank()) {
+                    snackBarHost.showReplacingSnackbar(event.message)
+                }
+
+                ModuleUiEvent.RefreshCompleted -> Unit
+            }
+        }
+    }
 
     val loadingDialog = rememberLoadingDialog()
     val confirmDialog = rememberConfirmDialog()
@@ -700,7 +690,6 @@ private fun ModuleList(
     var defaultWebUiShortcutIconUri by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedShortcutType by rememberSaveable { mutableStateOf<ShortcutType?>(null) }
     val showShortcutDialog = remember { mutableStateOf(false) }
-    val showShortcutTypeRow = remember { mutableStateOf(false) }
 
     fun openShortcutDialogForType(type: ShortcutType) {
         selectedShortcutType = type
@@ -713,17 +702,15 @@ private fun ModuleList(
         showShortcutDialog.value = true
     }
 
-    fun hasModuleShortcut(context: Context, moduleId: String, type: ShortcutType): Boolean {
-        return when (type) {
-            ShortcutType.Action -> Shortcut.hasModuleActionShortcut(context, moduleId)
-            ShortcutType.WebUI -> Shortcut.hasModuleWebUiShortcut(context, moduleId)
-        }
+    fun hasModuleShortcut(context: Context, moduleId: String, type: ShortcutType): Boolean = when (type) {
+        ShortcutType.Action -> shortcut.hasModuleActionShortcut(context, moduleId)
+        ShortcutType.WebUI -> shortcut.hasModuleWebUiShortcut(context, moduleId)
     }
 
     fun deleteModuleShortcut(context: Context, moduleId: String, type: ShortcutType) {
         when (type) {
-            ShortcutType.Action -> Shortcut.deleteModuleActionShortcut(context, moduleId)
-            ShortcutType.WebUI -> Shortcut.deleteModuleWebUiShortcut(context, moduleId)
+            ShortcutType.Action -> shortcut.deleteModuleActionShortcut(context, moduleId)
+            ShortcutType.WebUI -> shortcut.deleteModuleWebUiShortcut(context, moduleId)
         }
     }
 
@@ -732,31 +719,34 @@ private fun ModuleList(
         moduleId: String,
         name: String,
         iconUri: String?,
-        type: ShortcutType
+        type: ShortcutType,
+        intentToken: String,
     ) {
         when (type) {
             ShortcutType.Action -> {
-                Shortcut.createModuleActionShortcut(
+                shortcut.createModuleActionShortcut(
                     context = context,
                     moduleId = moduleId,
                     name = name,
-                    iconUri = iconUri
+                    iconUri = iconUri,
+                    intentToken = intentToken,
                 )
             }
 
             ShortcutType.WebUI -> {
-                Shortcut.createModuleWebUiShortcut(
+                shortcut.createModuleWebUiShortcut(
                     context = context,
                     moduleId = moduleId,
                     name = name,
-                    iconUri = iconUri
+                    iconUri = iconUri,
+                    intentToken = intentToken,
                 )
             }
         }
     }
 
     val pickShortcutIconLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.GetContent(),
     ) { uri ->
         shortcutIconUri = uri?.toString()
     }
@@ -769,7 +759,7 @@ private fun ModuleList(
             return@LaunchedEffect
         }
         val bitmap = withContext(Dispatchers.IO) {
-            Shortcut.loadShortcutBitmap(context, uriStr)
+            shortcut.loadShortcutBitmap(context, uriStr)
         }
         shortcutPreviewIcon.value = bitmap?.asImageBitmap()
     }
@@ -789,46 +779,57 @@ private fun ModuleList(
     }
 
     suspend fun onModuleUpdate(
-        module: ModuleViewModel.ModuleInfo,
+        module: InstalledModule,
         changelogUrl: String,
         downloadUrl: String,
-        fileName: String
+        fileName: String,
     ) {
-        val request = okhttp3.Request.Builder()
-            .url(changelogUrl)
-            .build()
-
-        val changelogResult = loadingDialog.withLoading {
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    ksuApp.okhttpClient.newCall(request).execute().body!!.string()
-                }
-            }
-        }
-
         val showToast: suspend (String) -> Unit = { msg ->
             withContext(Dispatchers.Main) {
                 Toast.makeText(
                     context,
                     msg,
-                    Toast.LENGTH_SHORT
+                    Toast.LENGTH_SHORT,
                 ).show()
             }
         }
 
+        val verification = loadingDialog.withLoading { viewModel.resolveUpdate(module) }
+        if (verification == ModuleUpdateVerification.Rejected) {
+            showToast(context.getString(R.string.repo_update_unverifiable))
+            return
+        }
+        val registry = verification as? ModuleUpdateVerification.Registry
+        val canInstall = { registry == null || viewModel.isUpdateCurrent(module, registry) }
+        val changelogResult = if (registry != null) {
+            Result.success(
+                ModuleReadme(
+                    registry.release.descriptionHTML.ifBlank { module.description },
+                    registry.repositoryUrl,
+                    if (registry.release.descriptionHTML.isNotBlank()) DocumentFormat.HTML else DocumentFormat.MARKDOWN,
+                    DocumentPolicy.SameOrigin(registry.repositoryUrl),
+                ),
+            )
+        } else {
+            loadingDialog.withLoading { viewModel.loadUpdateChangelog(changelogUrl, module.updateJson) }
+        }
         val changelog = changelogResult.getOrElse {
-            showToast(fetchChangeLogFailed.format(it.message))
+            showToast(context.getString(R.string.repo_document_error))
             return
         }
 
         val confirmResult = confirmDialog.awaitConfirm(
             changelogText,
-            content = changelog,
-            markdown = true,
+            content = changelog.content,
+            document = changelog,
             confirm = updateText,
         )
 
         if (confirmResult != ConfirmResult.Confirmed) {
+            return
+        }
+        if (!canInstall()) {
+            showToast(context.getString(R.string.repo_update_unverifiable))
             return
         }
 
@@ -839,10 +840,15 @@ private fun ModuleList(
             download(
                 context,
                 permissionRequestInterface,
-                downloadUrl,
+                registry?.zipUrl ?: downloadUrl,
                 fileName,
+                enqueueDownload,
+                observeDownload,
+                expected = registry?.expected,
+                canEnqueue = canInstall,
+                onFailed = { failed -> Toast.makeText(context, downloadFailureMessage(context, failed), Toast.LENGTH_LONG).show() },
                 onDownloaded = { uri ->
-                    onUpdateModule(uri)
+                    if (canInstall()) onUpdateModule(uri)
                 },
                 onDownloading = {
                     launch(Dispatchers.Main) {
@@ -853,7 +859,7 @@ private fun ModuleList(
         }
     }
 
-    suspend fun onModuleUninstallClicked(module: ModuleViewModel.ModuleInfo) {
+    suspend fun onModuleUninstallClicked(module: InstalledModule) {
         val isUninstall = !module.remove
         if (isUninstall) {
             val formatter = if (module.metamodule) metaModuleUninstallConfirm else moduleUninstallConfirm
@@ -861,52 +867,24 @@ private fun ModuleList(
                 moduleStr,
                 content = formatter.format(module.name),
                 confirm = uninstall,
-                dismiss = cancel
+                dismiss = cancel,
             )
             if (confirmResult != ConfirmResult.Confirmed) {
                 return
             }
         }
 
-        val success = loadingDialog.withLoading {
+        if (isUninstall) {
             withContext(Dispatchers.IO) {
-                if (isUninstall) {
-                    Shortcut.deleteModuleActionShortcut(context, module.dirId)
-                    Shortcut.deleteModuleWebUiShortcut(context, module.dirId)
-                    uninstallModule(module.dirId)
-                } else {
-                    undoUninstallModule(module.dirId)
-                }
+                shortcut.deleteModuleActionShortcut(context, module.id)
+                shortcut.deleteModuleWebUiShortcut(context, module.id)
             }
         }
-
-        if (success) {
-            viewModel.fetchModuleList()
-            viewModel.markNeedRefresh()
-        }
-        if (!isUninstall) return
-        val message = if (success) {
-            successUninstall.format(module.name)
-        } else {
-            failedUninstall.format(module.name)
-        }
-        val actionLabel = if (success) {
-            reboot
-        } else {
-            null
-        }
-        val result = snackBarHost.showSnackbar(
-            message = message,
-            actionLabel = actionLabel,
-            duration = SnackbarDuration.Long
-        )
-        if (result == SnackbarResult.ActionPerformed) {
-            reboot()
-        }
+        viewModel.dispatch(ModuleUiAction.SetRemoved(module.dirId, isUninstall))
     }
 
-    fun onModuleAddShortcut(module: ModuleViewModel.ModuleInfo) {
-        shortcutModuleId = module.dirId
+    fun onModuleAddShortcut(module: InstalledModule, shortcutType: ShortcutType) {
+        shortcutModuleId = module.id
         textFieldState.edit {
             replace(0, length, module.name)
         }
@@ -918,21 +896,13 @@ private fun ModuleList(
         defaultWebUiShortcutIconUri = module.webUiIconPath
             ?.takeIf { it.isNotBlank() }
             ?.let { "su:$it" }
-        if (module.hasActionScript && module.hasWebUi) {
-            selectedShortcutType = null
-            showShortcutTypeRow.value = true
-            openShortcutDialogForType(ShortcutType.Action)
-        } else if (module.hasActionScript) {
-            openShortcutDialogForType(ShortcutType.Action)
-        } else if (module.hasWebUi) {
-            openShortcutDialogForType(ShortcutType.WebUI)
-        }
+        openShortcutDialogForType(shortcutType)
     }
 
     PullToRefreshBox(
         state = pullRefreshState,
         onRefresh = {
-            viewModel.fetchModuleList(true)
+            viewModel.dispatch(ModuleUiAction.Refresh(manual = true))
         },
         modifier = boxModifier
             .fillMaxSize()
@@ -943,18 +913,24 @@ private fun ModuleList(
                     .padding(top = topPadding)
                     .align(Alignment.TopCenter),
                 state = pullRefreshState,
-                isRefreshing = viewModel.isRefreshing,
+                isRefreshing = uiState.isRefreshing,
             )
         },
-        isRefreshing = viewModel.isRefreshing
+        isRefreshing = uiState.isRefreshing,
     ) {
         val metaModuleWarningText by produceState<String?>(
             initialValue = null,
-            viewModel.hasModuleRequireMount,
-            showMetamoduleWarning
+            uiState.hasModuleRequireMount,
+            showMetaModuleWarning,
+            uiState.metaModuleStatus,
         ) {
             value = withContext(Dispatchers.IO) {
-                getMetaModuleWarningText(viewModel, context)
+                getMetaModuleWarningText(
+                    uiState.hasModuleRequireMount,
+                    showMetaModuleWarning,
+                    context,
+                    uiState.metaModuleStatus,
+                )
             }
         }
 
@@ -966,81 +942,66 @@ private fun ModuleList(
                     start = 16.dp,
                     top = 0.dp,
                     end = 16.dp,
-                    bottom = 72.dp + 5.dp + 5.dp // FAB + bottom padding of FAB
+                    bottom = 72.dp + 5.dp + 5.dp, // FAB + bottom padding of FAB
                 )
             },
         ) {
             item {
-                Spacer(modifier = Modifier.height(topPadding + 1.dp))
+                Spacer(modifier = Modifier.height(topPadding))
             }
 
             if (metaModuleWarningText != null) {
                 item(
-                    key = "warning"
+                    key = "warning",
                 ) {
-                    MetaModuleWarningCard(metaModuleWarningText!!)
+                    MetaModuleWarningCard(
+                        text = metaModuleWarningText!!,
+                        visible = showMetaModuleWarning,
+                        onClose = { showMetaModuleWarning = false },
+                    )
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
 
             items(
-                items = viewModel.moduleList,
-                key = { "module-${it.dirId}" }
+                items = uiState.moduleList,
+                key = { "module-$it.id" },
             ) { module ->
                 ModuleItem(
                     viewModel = viewModel,
                     module = module,
+                    moduleSizes = uiState.moduleSizes,
                     updateUrl = module.moduleUpdate?.zipUrl.orEmpty(),
                     onUninstallClicked = {
-                        viewModel.viewModelScope.launch {
+                        scope.launch {
                             withContext(Dispatchers.IO) {
                                 onModuleUninstallClicked(module)
                             }
                         }
                     },
-                    onCheckChanged = {
-                        viewModel.viewModelScope.launch {
-                            withContext(Dispatchers.IO) {
-                                val success = withContext(Dispatchers.IO) {
-                                    toggleModule(module.dirId, !module.enabled)
-                                }
-                                if (success) {
-                                    viewModel.fetchModuleList()
-
-                                    val result = snackBarHost.showSnackbar(
-                                        message = rebootToApply,
-                                        actionLabel = reboot,
-                                        duration = SnackbarDuration.Long
-                                    )
-                                    if (result == SnackbarResult.ActionPerformed) {
-                                        reboot()
-                                    }
-                                } else {
-                                    val message =
-                                        if (module.enabled) failedDisable else failedEnable
-                                    snackBarHost.showSnackbar(message.format(module.name))
-                                }
-                            }
-                        }
+                    onCheckChanged = { enabled ->
+                        viewModel.dispatch(ModuleUiAction.SetEnabled(module.dirId, enabled))
+                        true
                     },
                     onUpdate = {
-                        viewModel.viewModelScope.launch {
+                        scope.launch {
                             withContext(Dispatchers.IO) {
                                 onModuleUpdate(
                                     module,
                                     module.moduleUpdate!!.changelog,
                                     module.moduleUpdate.zipUrl,
-                                    "${module.name}-${module.moduleUpdate.version}.zip"
+                                    "${module.name}-${module.moduleUpdate.version}.zip",
                                 )
                             }
                         }
                     },
                     onClick = {
-                        onClickModule(it.dirId, it.name, it.hasWebUi)
+                        onClickModule(it.dirId, it.hasWebUi)
                     },
-                    onModuleAddShortcut = {
-                        onModuleAddShortcut(it)
-                    }
+                    onModuleAddShortcut = { module, type ->
+                        onModuleAddShortcut(module, type)
+                    },
+                    showMoreModuleInfo = uiState.showMoreModuleInfo,
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1054,13 +1015,13 @@ private fun ModuleList(
 
     if (showShortcutDialog.value) {
         ModalBottomSheet(
-            sheetState = rememberModalBottomSheetState(
-                skipPartiallyExpanded = true
+            sheetState = rememberBottomSheetState(
+                initialValue = SheetValue.Hidden,
+                enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
             ),
             onDismissRequest = {
                 showShortcutDialog.value = false
-                showShortcutTypeRow.value = false
-            }
+            },
         ) {
             var error by remember { mutableStateOf("") }
             Column(
@@ -1072,44 +1033,15 @@ private fun ModuleList(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
-                        .padding(horizontal = 24.dp)
+                        .padding(horizontal = 24.dp),
                 )
-                if (showShortcutTypeRow.value) {
-                    PrimaryTabRow(
-                        selectedTabIndex = selectedShortcutType?.ordinal ?: 0,
-                        containerColor = Color.Transparent,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Tab(
-                            selected = selectedShortcutType == ShortcutType.Action,
-                            onClick = {
-                                selectedShortcutType = ShortcutType.Action
-                                shortcutIconUri = defaultActionShortcutIconUri
-                                defaultShortcutIconUri = defaultActionShortcutIconUri
-                            },
-                            unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            text = { Text("Action") }
-                        )
-
-                        Tab(
-                            selected = selectedShortcutType == ShortcutType.WebUI,
-                            onClick = {
-                                selectedShortcutType = ShortcutType.WebUI
-                                shortcutIconUri = defaultWebUiShortcutIconUri
-                                defaultShortcutIconUri = defaultWebUiShortcutIconUri
-                            },
-                            unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            text = { Text("WebUI") }
-                        )
-                    }
-                }
 
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .padding(vertical = 16.dp)
                         .size(100.dp)
-                        .clip(ContinuousRoundedRectangle(25.dp))
+                        .clip(ContinuousRoundedRectangle(25.dp)),
                 ) {
                     val preview = shortcutPreviewIcon.value
                     if (preview != null) {
@@ -1122,12 +1054,12 @@ private fun ModuleList(
                         Box(
                             modifier = Modifier
                                 .size(100.dp)
-                                .background(Color.White)
+                                .background(Color.White),
                         )
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher_foreground),
                             contentDescription = null,
-                            contentScale = FixedScale(1.5f)
+                            contentScale = FixedScale(1.5f),
                         )
                     }
                 }
@@ -1135,34 +1067,36 @@ private fun ModuleList(
                     if (shortcutIconUri == defaultShortcutIconUri) {
                         item {
                             SettingsBaseWidget(
-                                icon = Icons.TwoTone.Photo,
+                                iconPlaceholder = false,
+                                isOnBackground = false,
                                 title = stringResource(id = R.string.module_shortcut_icon_pick),
                                 onClick = {
                                     pickShortcutIconLauncher.launch("image/*")
-                                }
+                                },
                             ) {
                                 Icon(
                                     imageVector = Icons.TwoTone.ChevronRight,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(24.dp),
                                 )
                             }
                         }
                     } else {
                         item {
                             SettingsBaseWidget(
-                                icon = Icons.TwoTone.Restore,
+                                iconPlaceholder = false,
+                                isOnBackground = false,
                                 title = stringResource(id = R.string.restore),
                                 onClick = {
                                     shortcutIconUri = defaultShortcutIconUri
-                                }
+                                },
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.TwoTone.Undo,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(24.dp),
                                 )
                             }
                         }
@@ -1175,19 +1109,23 @@ private fun ModuleList(
                             state = textFieldState,
                             title = stringResource(id = R.string.module_shortcut_name_label),
                             error = error,
+                            renderBackgroundBlur = false,
                         )
 
                         LaunchedEffect(textFieldState.text) {
                             error = if (textFieldState.text.isBlank()) {
                                 shouldNotEmpty
-                            } else ""
+                            } else {
+                                ""
+                            }
                         }
                     }
 
                     if (hasExistingShortcut) {
                         item {
                             SettingsJumpPageWidget(
-                                icon = Icons.TwoTone.Delete,
+                                iconPlaceholder = false,
+                                renderBackgroundBlur = false,
                                 title = stringResource(id = R.string.module_shortcut_delete),
                                 onClick = {
                                     val moduleId = shortcutModuleId
@@ -1202,40 +1140,35 @@ private fun ModuleList(
                     }
 
                     item {
+                        val settings = koinInject<SettingsPlatformRepository>()
+                        val moduleShortcutSchemeCopied = stringResource(R.string.module_shortcut_scheme_copied)
+
                         SettingsJumpPageWidget(
-                            icon = Icons.TwoTone.Link,
-                            title = stringResource(R.string.module_shortcut_copy_url),
+                            iconPlaceholder = false,
+                            renderBackgroundBlur = false,
+                            title = stringResource(R.string.module_shortcut_copy_scheme),
                             onClick = {
-                                val moduleId = shortcutModuleId ?: return@SettingsJumpPageWidget
-                                val uri = when (selectedShortcutType) {
-                                    ShortcutType.Action ->
-                                        DeepLinkResolver.buildActionUri(context, moduleId)
-                                    ShortcutType.WebUI ->
-                                        DeepLinkResolver.buildWebUiUri(context, moduleId)
-                                    null -> return@SettingsJumpPageWidget
+                                val currentModuleId = shortcutModuleId
+                                val type = selectedShortcutType
+                                if (currentModuleId.isNullOrBlank() || type == null) {
+                                    return@SettingsJumpPageWidget
                                 }
-                                val clipboard =
-                                    context.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(
-                                    ClipData.newPlainText("KittiSU module URL", uri.toString())
-                                )
-                                Toast.makeText(
-                                    context,
-                                    R.string.module_shortcut_url_copied,
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                val url = shortcut.buildShortcutUri(currentModuleId, type, settings.intentToken).toString()
+                                val clipboard = context.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("KernelSU deep link", url))
+                                Toast.makeText(context, moduleShortcutSchemeCopied, Toast.LENGTH_SHORT).show()
                             },
                         )
                     }
                 }
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     OutlinedButton(
                         onClick = { showShortcutDialog.value = false },
                         modifier = Modifier
                             .weight(1f)
-                            .padding(start = 16.dp)
+                            .padding(start = 16.dp),
                     ) {
                         Text(
                             text = stringResource(id = android.R.string.cancel),
@@ -1252,7 +1185,8 @@ private fun ModuleList(
                                     moduleId = moduleId,
                                     name = textFieldState.text.toString(),
                                     iconUri = shortcutIconUri,
-                                    type = type
+                                    type = type,
+                                    intentToken = settings.intentToken,
                                 )
                             }
                             showShortcutDialog.value = false
@@ -1260,7 +1194,7 @@ private fun ModuleList(
                         enabled = error.isBlank(),
                         modifier = Modifier
                             .weight(1f)
-                            .padding(end = 16.dp)
+                            .padding(end = 16.dp),
                     ) {
                         Text(
                             text = if (hasExistingShortcut) {
@@ -1280,342 +1214,373 @@ private fun ModuleList(
 @Composable
 fun ModuleItem(
     viewModel: ModuleViewModel,
-    module: ModuleViewModel.ModuleInfo,
+    module: InstalledModule,
+    moduleSizes: Map<String, String>,
     updateUrl: String,
-    onUninstallClicked: (ModuleViewModel.ModuleInfo) -> Unit,
-    onCheckChanged: (Boolean) -> Unit,
-    onUpdate: (ModuleViewModel.ModuleInfo) -> Unit,
-    onClick: (ModuleViewModel.ModuleInfo) -> Unit,
-    onModuleAddShortcut: (ModuleViewModel.ModuleInfo) -> Unit,
+    onUninstallClicked: (InstalledModule) -> Unit,
+    onCheckChanged: suspend (Boolean) -> Boolean,
+    onUpdate: (InstalledModule) -> Unit,
+    onClick: (InstalledModule) -> Unit,
+    onModuleAddShortcut: (InstalledModule, ShortcutType) -> Unit,
+    showMoreModuleInfo: Boolean,
 ) {
+    val themeConfig: ThemeConfig = koinInject()
+    val cardConfig: CardConfig = koinInject()
     val navigator = LocalNavigator.current
     val context = LocalContext.current
-    val prefs = context.getSharedPreferences("settings", MODE_PRIVATE)
-    val isHideTagRow = prefs.getBoolean("is_hide_tag_row", false)
-    // 获取显示更多模块信息的设置
-    val showMoreModuleInfo = prefs.getBoolean("show_more_module_info", false)
-    // 获取是否显示模块横幅背景的设置
-    val useBanner = prefs.getBoolean("use_banner", true)
-
-    // 剪贴板管理器和触觉反馈
     val clipboardManager = context.getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
     val hapticFeedback = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    var isEnabled by remember(module.dirId) { mutableStateOf(module.enabled) }
+    var isChangingEnabled by remember(module.dirId) { mutableStateOf(false) }
+
+    LaunchedEffect(module.enabled) {
+        isEnabled = module.enabled
+    }
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(CardConfig.cardAlpha),
-        shape = RoundedCornerShape(16.dp)
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .renderBackgroundBlur(),
+        color =
+            if (themeConfig.isEnableBlurExp) {
+                Color.Transparent
+            } else {
+                MaterialTheme.colorScheme.surfaceBright.copy(cardConfig.cardAlpha)
+            },
+        shape = RoundedCornerShape(16.dp),
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            if (useBanner && !module.banner.isNullOrBlank()) {
-                val banner = module.banner
-                val alpha = 0.18f
-                Box(
-                    modifier = Modifier.matchParentSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (banner.startsWith("http", ignoreCase = true)) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(banner)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(),
-                            contentScale = ContentScale.Crop,
-                            alpha = alpha
+        val textDecoration = if (!module.remove) null else TextDecoration.LineThrough
+        val interactionSource = remember { MutableInteractionSource() }
+
+        LaunchedEffect(module.dirId) {
+            viewModel.dispatch(ModuleUiAction.LoadSize(module.dirId))
+        }
+
+        val sizeStr = moduleSizes[module.dirId]
+
+        Column(
+            modifier = Modifier
+                .run {
+                    if (module.hasActionScript || module.hasWebUi) {
+                        combinedClickable(
+                            onClick = {
+                                if (module.hasWebUi) {
+                                    onClick(module)
+                                }
+                            },
                         )
                     } else {
-                        val bannerData by produceState<ByteArray?>(key1 = banner, initialValue = null) {
-                            value = withContext(Dispatchers.IO) {
-                                runCatching {
-                                    SuFile(banner).newInputStream().use { it.readBytes() }
-                                }.getOrNull()
-                            }
-                        }
-
-                        bannerData?.let { bytes ->
-                            val bitmap = remember(bytes) {
-                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                            }
-                            bitmap?.let {
-                                Image(
-                                    bitmap = it,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .fillMaxHeight(),
-                                    contentScale = ContentScale.Crop,
-                                    alpha = alpha
-                                )
-                            }
-                        }
+                        this
                     }
                 }
-            }
-
-            val textDecoration = if (!module.remove) null else TextDecoration.LineThrough
-            val interactionSource = remember { MutableInteractionSource() }
-    
-            LaunchedEffect(module.dirId) {
-                viewModel.loadSize(module.dirId)
-            }
-    
-            val sizes by viewModel.moduleSize.collectAsStateWithLifecycle()
-    
-            val sizeStr = sizes[module.dirId]
-    
-            Column(
-                modifier = Modifier
-                    .run {
-                        if (module.hasActionScript || module.hasWebUi) {
-                            combinedClickable(
-                                onLongClick = {
-                                    onModuleAddShortcut(module)
-                                },
-                                onClick = {
-                                    if (module.hasWebUi) {
-                                        onClick(module)
-                                    }
-                                }
-                            )
-                        } else {
-                            this
-                        }
-                    }
-                    .padding(22.dp, 18.dp, 22.dp, 12.dp)
+                .padding(horizontal = 16.dp)
+                .padding(top = 12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                val moduleVersion = stringResource(id = R.string.module_version)
+                val moduleAuthor = stringResource(id = R.string.module_author)
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(0.8f),
                 ) {
-                    val moduleVersion = stringResource(id = R.string.module_version)
-                    val moduleAuthor = stringResource(id = R.string.module_author)
-    
-                    Column(
-                        modifier = Modifier.fillMaxWidth(0.8f)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = module.name,
-                                fontSize = MaterialTheme.typography.titleMedium.fontSize,
-                                fontWeight = FontWeight.SemiBold,
-                                lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
-                                fontFamily = MaterialTheme.typography.titleMedium.fontFamily,
-                                textDecoration = textDecoration,
-                                modifier = Modifier.weight(1f, false)
-                            )
-                        }
-    
-                        Text(
-                            text = "$moduleVersion: ${module.version}",
-                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
-                            lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
-                            fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
-                            textDecoration = textDecoration,
-                        )
-    
-                        Text(
-                            text = "$moduleAuthor: ${module.author}",
-                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
-                            lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
-                            fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
-                            textDecoration = textDecoration,
-                        )
-    
-                        // 显示更多模块信息时添加updateJson
-                        if (showMoreModuleInfo && module.updateJson.isNotEmpty()) {
-                            val updateJsonLabel = stringResource(R.string.module_update_json)
-                            Text(
-                                text = "$updateJsonLabel: ${module.updateJson}",
-                                fontSize = MaterialTheme.typography.bodySmall.fontSize,
-                                lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
-                                fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
-                                textDecoration = textDecoration,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 5,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .combinedClickable(
-                                        onClick = { },
-                                        onLongClick = {
-                                            val clipData = ClipData.newPlainText(
-                                                "Update JSON URL",
-                                                module.updateJson
-                                            )
-                                            clipboardManager.setPrimaryClip(clipData)
-                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-    
-                                            Toast.makeText(
-                                                context,
-                                                context.getString(R.string.module_update_json_copied),
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    ),
-                            )
-                        }
-                    }
-    
-                    Spacer(modifier = Modifier.weight(1f))
-    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        Switch(
-                            enabled = !module.update,
-                            checked = module.enabled,
-                            onCheckedChange = onCheckChanged,
-                            interactionSource = if (!module.hasWebUi) interactionSource else null,
-                            thumbContent = {
-                                if (module.enabled) {
-                                    Icon(
-                                        imageVector = Icons.TwoTone.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(SwitchDefaults.IconSize),
-                                    )
-                                } else
-                                {
-                                    Icon(
-                                        imageVector = Icons.TwoTone.Close,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        modifier = Modifier.size(SwitchDefaults.IconSize),
-                                    )
-                                }
-                            }
-                        )
-                    }
-                }
-    
-                Spacer(modifier = Modifier.height(12.dp))
-    
-                Text(
-                    text = module.description,
-                    fontSize = MaterialTheme.typography.bodySmall.fontSize,
-                    fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
-                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
-                    fontWeight = MaterialTheme.typography.bodySmall.fontWeight,
-                    overflow = TextOverflow.Ellipsis,
-                    maxLines = 4,
-                    textDecoration = textDecoration,
-                )
-    
-                if (!isHideTagRow) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    // 文件夹名称和大小标签
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        LabelText(
-                            label = module.dirId,
-                            containerColor = MaterialTheme.colorScheme.primary,
+                        Text(
+                            text = module.name,
+                            fontSize = MaterialTheme.typography.titleMedium.fontSize,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                            fontFamily = MaterialTheme.typography.titleMedium.fontFamily,
+                            textDecoration = textDecoration,
+                            modifier = Modifier.weight(1f, false),
                         )
-                        if (module.metamodule) {
-                            LabelText(
-                                label = "META",
-                                containerColor = MaterialTheme.colorScheme.tertiary,
-                            )
-                        }
-                        LabelText(
-                            label = sizeStr ?: "0 KB",
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    }
+
+                    Text(
+                        text = "$moduleVersion: ${module.version}",
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                        lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                        fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
+                        textDecoration = textDecoration,
+                    )
+
+                    Text(
+                        text = "$moduleAuthor: ${module.author}",
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                        lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                        fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
+                        textDecoration = textDecoration,
+                    )
+
+                    // 显示更多模块信息时添加updateJson
+                    if (showMoreModuleInfo && module.updateJson.isNotEmpty()) {
+                        val updateJsonLabel = stringResource(R.string.module_update_json)
+                        Text(
+                            text = "$updateJsonLabel: ${module.updateJson}",
+                            fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                            lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                            fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
+                            textDecoration = textDecoration,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 5,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = { },
+                                    onLongClick = {
+                                        val clipData = ClipData.newPlainText(
+                                            "Update JSON URL",
+                                            module.updateJson,
+                                        )
+                                        clipboardManager.setPrimaryClip(clipData)
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.module_update_json_copied),
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    },
+                                ),
                         )
                     }
                 }
-    
-                Spacer(modifier = Modifier.height(16.dp))
-    
-                HorizontalDivider(thickness = Dp.Hairline)
-    
-                Spacer(modifier = Modifier.height(8.dp))
-    
+
+                Spacer(modifier = Modifier.weight(1f))
+
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                 ) {
-                    if (module.hasActionScript) {
-                        FilledTonalButton(
-                            modifier = Modifier.defaultMinSize(minWidth = 52.dp, minHeight = 32.dp),
-                            enabled = !module.remove && module.enabled,
-                            onClick = {
-                                navigator.push(Route.ExecuteModuleAction(module.dirId))
-                                viewModel.markNeedRefresh()
+                    Switch(
+                        enabled = !module.update && !isChangingEnabled,
+                        checked = isEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                isChangingEnabled = true
+                                try {
+                                    if (onCheckChanged(enabled)) {
+                                        isEnabled = enabled
+                                    }
+                                } finally {
+                                    isChangingEnabled = false
+                                }
+                            }
+                        },
+                        interactionSource = if (!module.hasWebUi) interactionSource else null,
+                        thumbContent = {
+                            if (isEnabled) {
+                                Icon(
+                                    imageVector = Icons.TwoTone.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize),
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.TwoTone.Close,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.surfaceBright,
+                                    modifier = Modifier.size(SwitchDefaults.IconSize),
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = module.description,
+                fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
+                lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                fontWeight = MaterialTheme.typography.bodySmall.fontWeight,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 4,
+                textDecoration = textDecoration,
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                LabelText(
+                    label = module.dirId,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                )
+                if (module.metamodule) {
+                    LabelText(
+                        label = "META",
+                        containerColor = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+                LabelText(
+                    label = sizeStr ?: "0 KB",
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HorizontalDivider(thickness = Dp.Hairline)
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (module.hasActionScript) {
+                    Surface(
+                        modifier = Modifier
+                            .padding(vertical = 5.dp)
+                            .defaultMinSize(minWidth = 52.dp, minHeight = 32.dp)
+                            .clip(ButtonDefaults.filledTonalShape)
+                            .combinedClickable(
+                                onClick = {
+                                    navigator.push(Route.ExecuteModuleAction(module.dirId, false))
+                                    viewModel.dispatch(ModuleUiAction.MarkNeedRefresh)
+                                },
+                                onLongClick = {
+                                    onModuleAddShortcut(module, ShortcutType.Action)
+                                },
+                            ),
+                        color =
+                            if (!module.remove && isEnabled) {
+                                ButtonDefaults.filledTonalButtonColors().containerColor
+                            } else {
+                                ButtonDefaults.filledTonalButtonColors().disabledContainerColor
                             },
-                            contentPadding = ButtonDefaults.TextButtonContentPadding,
-                        ) {
-                            Icon(
-                                modifier = Modifier.size(20.dp),
-                                imageVector = Icons.TwoTone.PlayArrow,
-                                contentDescription = null
-                            )
-                        }
-                    }
-    
-                    if (module.hasWebUi) {
-                        FilledTonalButton(
-                            modifier = Modifier.defaultMinSize(minWidth = 52.dp, minHeight = 32.dp),
-                            enabled = !module.remove && module.enabled,
-                            onClick = { onClick(module) },
-                            interactionSource = interactionSource,
-                            contentPadding = ButtonDefaults.TextButtonContentPadding,
-                        ) {
-                            Icon(
-                                modifier = Modifier.size(20.dp),
-                                imageVector = Icons.AutoMirrored.TwoTone.Wysiwyg,
-                                contentDescription = null
-                            )
-                        }
-                    }
-    
-                    Spacer(modifier = Modifier.weight(1f, true))
-    
-                    if (updateUrl.isNotEmpty()) {
-                        Button(
-                            modifier = Modifier.defaultMinSize(minWidth = 52.dp, minHeight = 32.dp),
-                            enabled = !module.remove,
-                            onClick = { onUpdate(module) },
-                            shape = ButtonDefaults.textShape,
-                            contentPadding = ButtonDefaults.TextButtonContentPadding,
-                        ) {
-                            Icon(
-                                modifier = Modifier.size(20.dp),
-                                imageVector = Icons.TwoTone.Download,
-                                contentDescription = null
-                            )
-                        }
-                    }
-    
-                    FilledTonalButton(
-                        modifier = Modifier.defaultMinSize(minWidth = 52.dp, minHeight = 32.dp),
-                        onClick = { onUninstallClicked(module) },
-                        contentPadding = ButtonDefaults.TextButtonContentPadding,
-                    ) {
-                        if (!module.remove) {
-                            Icon(
-                                modifier = Modifier.size(20.dp),
-                                imageVector = Icons.TwoTone.Delete,
-                                contentDescription = null,
-                            )
+                        contentColor = if (!module.remove && isEnabled) {
+                            ButtonDefaults.filledTonalButtonColors().contentColor
                         } else {
-                            Icon(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .rotate(180f),
-                                imageVector = Icons.TwoTone.Refresh,
-                                contentDescription = null
-                            )
-                        }
+                            ButtonDefaults.filledTonalButtonColors().disabledContentColor
+                        },
+                    ) {
+                        Icon(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .padding(12.dp, 7.dp, 12.dp, 7.dp),
+                            imageVector = Icons.TwoTone.PlayArrow,
+                            contentDescription = null,
+                        )
+                    }
+                }
+
+                if (module.hasWebUi) {
+                    Surface(
+                        modifier = Modifier
+                            .padding(vertical = 5.dp)
+                            .defaultMinSize(minWidth = 52.dp, minHeight = 32.dp)
+                            .clip(ButtonDefaults.filledTonalShape)
+                            .combinedClickable(
+                                onClick = { onClick(module) },
+                                onLongClick = {
+                                    onModuleAddShortcut(module, ShortcutType.WebUI)
+                                },
+                            ),
+                        color =
+                            if (!module.remove && isEnabled) {
+                                ButtonDefaults.filledTonalButtonColors().containerColor
+                            } else {
+                                ButtonDefaults.filledTonalButtonColors().disabledContainerColor
+                            },
+                        contentColor = if (!module.remove && isEnabled) {
+                            ButtonDefaults.filledTonalButtonColors().contentColor
+                        } else {
+                            ButtonDefaults.filledTonalButtonColors().disabledContentColor
+                        },
+                    ) {
+                        Icon(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .padding(12.dp, 7.dp, 12.dp, 7.dp),
+                            imageVector = Icons.AutoMirrored.TwoTone.Wysiwyg,
+                            contentDescription = null,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f, true))
+
+                if (updateUrl.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier
+                            .padding(vertical = 5.dp)
+                            .defaultMinSize(minWidth = 52.dp, minHeight = 32.dp)
+                            .clip(ButtonDefaults.filledTonalShape)
+                            .clickable {
+                                onUpdate(module)
+                            },
+                        color =
+                            if (!module.remove) {
+                                ButtonDefaults.filledTonalButtonColors().containerColor
+                            } else {
+                                ButtonDefaults.filledTonalButtonColors().disabledContainerColor
+                            },
+                        contentColor = if (!module.remove) {
+                            ButtonDefaults.filledTonalButtonColors().contentColor
+                        } else {
+                            ButtonDefaults.filledTonalButtonColors().disabledContentColor
+                        },
+                    ) {
+                        Icon(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .padding(12.dp, 7.dp, 12.dp, 7.dp),
+                            imageVector = Icons.TwoTone.Download,
+                            contentDescription = null,
+                        )
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier
+                        .padding(vertical = 5.dp)
+                        .defaultMinSize(minWidth = 52.dp, minHeight = 32.dp)
+                        .clip(ButtonDefaults.filledTonalShape)
+                        .clickable {
+                            onUninstallClicked(module)
+                        },
+                    color =
+                        if (!module.remove) {
+                            ButtonDefaults.filledTonalButtonColors().containerColor
+                        } else {
+                            ButtonDefaults.filledTonalButtonColors().disabledContainerColor
+                        },
+                    contentColor = if (!module.remove) {
+                        ButtonDefaults.filledTonalButtonColors().contentColor
+                    } else {
+                        ButtonDefaults.filledTonalButtonColors().disabledContentColor
+                    },
+                ) {
+                    if (!module.remove) {
+                        Icon(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .padding(12.dp, 7.dp, 12.dp, 7.dp),
+                            imageVector = Icons.TwoTone.Delete,
+                            contentDescription = null,
+                        )
+                    } else {
+                        Icon(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .rotate(180f)
+                                .padding(12.dp, 7.dp, 12.dp, 7.dp),
+                            imageVector = Icons.TwoTone.Refresh,
+                            contentDescription = null,
+                        )
                     }
                 }
             }
@@ -1625,8 +1590,8 @@ fun ModuleItem(
 
 @Preview
 @Composable
-fun ModuleItemPreview() {
-    val module = ModuleViewModel.ModuleInfo(
+private fun ModuleItemPreview() {
+    val module = InstalledModule(
         id = "id",
         name = "name",
         version = "version",
@@ -1642,17 +1607,19 @@ fun ModuleItemPreview() {
         metamodule = true,
         actionIconPath = null,
         webUiIconPath = null,
-        banner = null,
         dirId = "dirId",
-        moduleUpdate = null
+        moduleUpdate = null,
     )
     ModuleItem(
-        viewModel<ModuleViewModel>(),
+        koinViewModel<ModuleViewModel>(),
         module,
+        emptyMap(),
         "",
         {},
+        { true },
         {},
         {},
-        {},
-        {})
+        { _, _ -> },
+        false,
+    )
 }

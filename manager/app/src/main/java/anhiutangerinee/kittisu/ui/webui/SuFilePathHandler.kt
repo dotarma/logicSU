@@ -5,11 +5,8 @@ import android.util.Log
 import android.webkit.WebResourceResponse
 import androidx.annotation.WorkerThread
 import androidx.webkit.WebViewAssetLoader
-import anhiutangerinee.kittisu.ui.webui.MonetColorsProvider.getColorsCss
+import anhiutangerinee.kittisu.data.webui.WebUiRepository
 import anhiutangerinee.kittisu.ui.webui.SuFilePathHandler.Companion.DEFAULT_MIME_TYPE
-import com.topjohnwu.superuser.Shell
-import com.topjohnwu.superuser.io.SuFile
-import com.topjohnwu.superuser.io.SuFileInputStream
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
@@ -38,9 +35,10 @@ import java.util.zip.GZIPInputStream
  */
 class SuFilePathHandler(
     directory: File,
-    private val shell: Shell,
+    private val webUiRepository: WebUiRepository,
     private val insetsSupplier: InsetsSupplier,
-    private val onInsetsRequestedListener: ((Boolean) -> Unit)?
+    private val onInsetsRequestedListener: ((Boolean) -> Unit)?,
+    private val colorsCssProvider: () -> String,
 ) : WebViewAssetLoader.PathHandler {
 
     private val directory: File
@@ -50,13 +48,13 @@ class SuFilePathHandler(
             this.directory = File(getCanonicalDirPath(directory))
             if (!isAllowedInternalStorageDir()) {
                 throw IllegalArgumentException(
-                    "The given directory \"$directory\" doesn't exist under an allowed app internal storage directory"
+                    "The given directory \"$directory\" doesn't exist under an allowed app internal storage directory",
                 )
             }
         } catch (e: IOException) {
             throw IllegalArgumentException(
                 "Failed to resolve the canonical path for the given directory: ${directory.path}",
-                e
+                e,
             )
         }
     }
@@ -65,13 +63,11 @@ class SuFilePathHandler(
         fun get(): Insets
     }
 
-    private fun isAllowedInternalStorageDir(): Boolean {
-        return try {
-            val dir = getCanonicalDirPath(directory)
-            FORBIDDEN_DATA_DIRS.none { dir.startsWith(it) }
-        } catch (_: IOException) {
-            false
-        }
+    private fun isAllowedInternalStorageDir(): Boolean = try {
+        val dir = getCanonicalDirPath(directory)
+        FORBIDDEN_DATA_DIRS.none { dir.startsWith(it) }
+    } catch (_: IOException) {
+        false
     }
 
     /**
@@ -101,29 +97,30 @@ class SuFilePathHandler(
             return WebResourceResponse(
                 "text/css",
                 "utf-8",
-                ByteArrayInputStream(css.toByteArray(StandardCharsets.UTF_8))
+                ByteArrayInputStream(css.toByteArray(StandardCharsets.UTF_8)),
             )
         }
 
         if (path == "internal/colors.css") {
-            val css = getColorsCss()
+            val css = colorsCssProvider()
             return WebResourceResponse(
                 "text/css",
                 "utf-8",
-                ByteArrayInputStream(css.toByteArray(StandardCharsets.UTF_8))
+                ByteArrayInputStream(css.toByteArray(StandardCharsets.UTF_8)),
             )
         }
 
         try {
             val file = getCanonicalFileIfChild(directory, path)
             if (file != null) {
-                val inputStream = openFile(file, shell)
+                val inputStream = webUiRepository.openFile(file.absolutePath)
+                    ?: return WebResourceResponse(null, null, null)
                 val mimeType = guessMimeType(path)
-                return WebResourceResponse(mimeType, null, inputStream)
+                return WebResourceResponse(mimeType, null, handleSvgzStream(path, inputStream))
             } else {
                 Log.e(
                     TAG,
-                    "The requested file: $path is outside the mounted directory: $directory"
+                    "The requested file: $path is outside the mounted directory: $directory",
                 )
             }
         } catch (e: IOException) {
@@ -172,22 +169,10 @@ class SuFilePathHandler(
         }
 
         @Throws(IOException::class)
-        private fun handleSvgzStream(path: String, stream: InputStream): InputStream {
-            return if (path.endsWith(".svgz")) {
-                GZIPInputStream(stream)
-            } else {
-                stream
-            }
-        }
-
-        @JvmStatic
-        @Throws(IOException::class)
-        fun openFile(file: File, shell: Shell): InputStream {
-            val suFile = SuFile(file.absolutePath).apply {
-                setShell(shell)
-            }
-            val fis = SuFileInputStream.open(suFile)
-            return handleSvgzStream(file.path, fis)
+        private fun handleSvgzStream(path: String, stream: InputStream): InputStream = if (path.endsWith(".svgz")) {
+            GZIPInputStream(stream)
+        } else {
+            stream
         }
 
         /**
@@ -198,8 +183,6 @@ class SuFilePathHandler(
          * @return MIME type guessed from file extension or [DEFAULT_MIME_TYPE].
          */
         @JvmStatic
-        fun guessMimeType(filePath: String): String {
-            return MimeUtil.getMimeFromFileName(filePath) ?: DEFAULT_MIME_TYPE
-        }
+        fun guessMimeType(filePath: String): String = MimeUtil.getMimeFromFileName(filePath) ?: DEFAULT_MIME_TYPE
     }
 }

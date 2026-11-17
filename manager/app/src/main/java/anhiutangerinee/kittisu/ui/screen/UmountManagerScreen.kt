@@ -48,11 +48,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import anhiutangerinee.kittisu.R
 import anhiutangerinee.kittisu.ui.component.ConfirmResult
 import anhiutangerinee.kittisu.ui.component.SwipeableSnackbarHost
@@ -66,23 +65,30 @@ import anhiutangerinee.kittisu.ui.theme.CardConfig
 import anhiutangerinee.kittisu.ui.theme.ThemeConfig
 import anhiutangerinee.kittisu.ui.theme.blurEffect
 import anhiutangerinee.kittisu.ui.theme.blurSource
+import anhiutangerinee.kittisu.ui.util.ActivityResumeEffect
 import anhiutangerinee.kittisu.ui.util.LocalSnackbarHost
+import anhiutangerinee.kittisu.ui.util.adaptiveScaffoldWindowInsets
+import anhiutangerinee.kittisu.ui.util.showReplacingSnackbar
 import anhiutangerinee.kittisu.ui.viewmodel.UmountManagerScreenViewModel
-import kotlinx.coroutines.Dispatchers
+import anhiutangerinee.kittisu.ui.viewmodel.UmountManagerUiAction
+import anhiutangerinee.kittisu.ui.viewmodel.UmountManagerUiEvent
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UmountManagerScreen() {
-    val viewModel = viewModel<UmountManagerScreenViewModel>()
+    val themeConfig: ThemeConfig = koinInject()
+    val cardConfig: CardConfig = koinInject()
+    val viewModel = koinViewModel<UmountManagerScreenViewModel>()
+    val uiState by viewModel.state.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     val snackBarHost = LocalSnackbarHost.current
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val confirmDialog = rememberConfirmDialog()
 
-    var isLoading by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -91,10 +97,23 @@ fun UmountManagerScreen() {
     LaunchedEffect(Unit) {
         scrollBehavior.state.heightOffset =
             scrollBehavior.state.heightOffsetLimit
-        viewModel.refreshData(context)
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.events.collectLatest { event ->
+            when (event) {
+                is UmountManagerUiEvent.Message ->
+                    snackBarHost.showReplacingSnackbar(event.message)
+            }
+        }
+    }
+
+    ActivityResumeEffect {
+        viewModel.dispatch(UmountManagerUiAction.Refresh(force = true))
     }
 
     Scaffold(
+        contentWindowInsets = adaptiveScaffoldWindowInsets(),
         topBar = {
             LargeFlexibleTopAppBar(
                 modifier = Modifier
@@ -105,28 +124,30 @@ fun UmountManagerScreen() {
                     AppBackButton(
                         onClick = {
                             navigator.pop()
-                        }
+                        },
                     )
                 },
                 windowInsets = TopAppBarDefaults.windowInsets.add(WindowInsets(left = 12.dp)),
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor =
-                        if (ThemeConfig.isEnableBlur)
+                        if (themeConfig.isEnableBlur) {
                             Color.Transparent
-                        else
-                            MaterialTheme.colorScheme.surfaceContainer.copy(CardConfig.cardAlpha),
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainer.copy(cardConfig.cardAlpha)
+                        },
                     scrolledContainerColor =
-                        if (ThemeConfig.isEnableBlur)
+                        if (themeConfig.isEnableBlur) {
                             Color.Transparent
-                        else
-                            MaterialTheme.colorScheme.surfaceContainer.copy(CardConfig.cardAlpha),
-                )
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainer.copy(cardConfig.cardAlpha)
+                        },
+                ),
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddDialog = true }
+                onClick = { showAddDialog = true },
             ) {
                 Icon(Icons.TwoTone.Add, contentDescription = null)
             }
@@ -135,7 +156,7 @@ fun UmountManagerScreen() {
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) { paddingValues ->
-        if (isLoading) { // 初次加载时动画
+        if (uiState.isLoading) { // 初次加载时动画
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -144,19 +165,17 @@ fun UmountManagerScreen() {
             ) {
                 LoadingIndicator()
             }
-        }
-        else {
+        } else {
             PullToRefreshBox(
                 state = pullToRefreshState,
-                isRefreshing = viewModel.isRefreshing,
+                isRefreshing = uiState.isRefreshing,
                 onRefresh = {
-                    viewModel.markUmountPathDirty()
-                    viewModel.refreshData(context)
+                    viewModel.dispatch(UmountManagerUiAction.Refresh())
                 },
                 indicator = {
                     PullToRefreshDefaults.LoadingIndicator(
                         state = pullToRefreshState,
-                        isRefreshing = viewModel.isRefreshing,
+                        isRefreshing = uiState.isRefreshing,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = paddingValues.calculateTopPadding()),
@@ -164,7 +183,7 @@ fun UmountManagerScreen() {
                 },
                 modifier = Modifier
                     .fillMaxSize()
-                    .blurSource()
+                    .blurSource(),
             ) {
                 LazyColumn(
                     modifier = Modifier
@@ -174,8 +193,8 @@ fun UmountManagerScreen() {
                         top = paddingValues.calculateTopPadding() + 5.dp,
                         start = 0.dp,
                         end = 0.dp,
-                        bottom = paddingValues.calculateBottomPadding() + 72.dp + 5.dp + 5.dp // FAB
-                    )
+                        bottom = paddingValues.calculateBottomPadding() + 72.dp + 5.dp + 5.dp, // FAB
+                    ),
                 ) {
                     item {
                         WarningCard(
@@ -187,7 +206,7 @@ fun UmountManagerScreen() {
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    if (viewModel.umountPaths.isEmpty()) {
+                    if (uiState.umountPaths.isEmpty()) {
                         item {
                             WarningCard(
                                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -200,8 +219,9 @@ fun UmountManagerScreen() {
                     }
 
                     lazySegmentColumn(
-                        viewModel.umountPaths,
-                        key = { _, it -> it.path }) { _, entry ->
+                        uiState.umountPaths,
+                        key = { _, it -> it.path },
+                    ) { _, entry ->
                         SettingsBaseWidget(
                             icon = Icons.TwoTone.Folder,
                             title = entry.path,
@@ -211,45 +231,44 @@ fun UmountManagerScreen() {
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = 5.dp)
+                                        .padding(top = 5.dp),
                                 ) {
                                     LabelText(
                                         label = if (entry.persistent) {
                                             stringResource(R.string.persistent)
                                         } else {
                                             stringResource(R.string.temporary)
-                                        }
+                                        },
                                     )
                                     LabelText(
-                                        label = entry.flagName,
+                                        label = entry.flags.toUmountFlagName(),
                                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                     )
                                 }
-                            }
+                            },
                         ) {
                             val confirmDeleteSummary = stringResource(
                                 R.string.confirm_delete_umount_path,
-                                entry.path
+                                entry.path,
                             )
                             IconButton(
                                 onClick = {
                                     scope.launch {
                                         val confirmResult = confirmDialog.awaitConfirm(
                                             title = confirmDelete,
-                                            content = confirmDeleteSummary
+                                            content = confirmDeleteSummary,
                                         )
-                                        if (confirmResult != ConfirmResult.Confirmed)
+                                        if (confirmResult != ConfirmResult.Confirmed) {
                                             return@launch
-                                        withContext(Dispatchers.IO) {
-                                            viewModel.removePath(entry, snackBarHost, context)
                                         }
+                                        viewModel.dispatch(UmountManagerUiAction.Remove(entry))
                                     }
-                                }
+                                },
                             ) {
                                 Icon(
                                     imageVector = Icons.TwoTone.Delete,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error
+                                    tint = MaterialTheme.colorScheme.error,
                                 )
                             }
                         }
@@ -264,30 +283,32 @@ fun UmountManagerScreen() {
                 onConfirm = { path, flags ->
                     showAddDialog = false
 
-                    viewModel.umountPaths.filter { it.path == path }.forEach {
-                        viewModel.removePath(
-                            entry = it,
-                            snackBarHost = null,
-                            context = null,
-                        )
+                    uiState.umountPaths.filter { it.path == path }.forEach {
+                        viewModel.dispatch(UmountManagerUiAction.Remove(it))
                     }
 
-                    viewModel.addPath(
-                        path = path,
-                        flags = flags,
-                        snackBarHost = snackBarHost,
-                        context = context
-                    )
-                }
+                    viewModel.dispatch(UmountManagerUiAction.Add(path, flags))
+                },
             )
         }
     }
 }
 
 @Composable
+private fun Int.toUmountFlagName(): String = when (this) {
+    -1 -> stringResource(R.string.unknown)
+    0 -> "UMOUNT_UNUSED"
+    1 -> "MNT_FORCE"
+    2 -> "MNT_DETACH"
+    4 -> "MNT_EXPIRE"
+    8 -> "UMOUNT_NOFOLLOW"
+    else -> toString()
+}
+
+@Composable
 fun AddUmountPathDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, Int) -> Unit
+    onConfirm: (String, Int) -> Unit,
 ) {
     var path by remember { mutableStateOf("") }
     var flags by remember { mutableStateOf("0") }
@@ -302,7 +323,7 @@ fun AddUmountPathDialog(
                     onValueChange = { path = it },
                     label = { Text(stringResource(R.string.mount_path)) },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -314,7 +335,7 @@ fun AddUmountPathDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    supportingText = { Text(stringResource(R.string.umount_flags_hint)) }
+                    supportingText = { Text(stringResource(R.string.umount_flags_hint)) },
                 )
             }
         },
@@ -324,7 +345,7 @@ fun AddUmountPathDialog(
                     val flagsInt = flags.toIntOrNull() ?: 0
                     onConfirm(path, flagsInt)
                 },
-                enabled = path.isNotBlank()
+                enabled = path.isNotBlank(),
             ) {
                 Text(stringResource(android.R.string.ok))
             }
@@ -333,6 +354,6 @@ fun AddUmountPathDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(android.R.string.cancel))
             }
-        }
+        },
     )
 }

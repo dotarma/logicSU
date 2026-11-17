@@ -1,95 +1,118 @@
 package anhiutangerinee.kittisu.ui.viewmodel
 
-import android.content.pm.PackageInfo
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import anhiutangerinee.kittisu.Natives
-import anhiutangerinee.kittisu.ksuApp
-import anhiutangerinee.kittisu.ui.util.clearDynamicManager
-import anhiutangerinee.kittisu.ui.util.getDynamicManagerConfig
-import anhiutangerinee.kittisu.ui.util.setDynamicManagerApk
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.File
+import androidx.lifecycle.viewModelScope
+import anhiutangerinee.kittisu.domain.model.DynamicManagerApp
+import anhiutangerinee.kittisu.domain.model.DynamicManagerConfig
+import anhiutangerinee.kittisu.domain.usecase.ClearDynamicManagerUseCase
+import anhiutangerinee.kittisu.domain.usecase.ObserveDynamicManagerStateUseCase
+import anhiutangerinee.kittisu.domain.usecase.RefreshDynamicManagerUseCase
+import anhiutangerinee.kittisu.domain.usecase.SelectDynamicManagerUseCase
+import anhiutangerinee.kittisu.domain.usecase.SetManualDynamicManagerUseCase
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+typealias DynamicManagerAppItem = DynamicManagerApp
 
 @Immutable
-data class DynamicManagerApp(
-    val label: String,
-    val packageName: String,
-    val packageInfo: PackageInfo,
-    val apkPath: String,
-    val selected: Boolean,
-    val changeable: Boolean,
+data class DynamicManagerUiState(
+    val config: DynamicManagerConfig? = null,
+    val apps: List<DynamicManagerApp> = emptyList(),
+    val search: String = "",
+    val isLoading: Boolean = true,
+    val isRefreshing: Boolean = false,
+    val isSubmitting: Boolean = false,
 )
 
-class DynamicManagerViewModel : ViewModel() {
-    var config by mutableStateOf<Natives.DynamicManagerConfig?>(null)
-        private set
-    var apps by mutableStateOf<List<DynamicManagerApp>>(emptyList())
-        private set
-    var loading by mutableStateOf(true)
-        private set
+sealed interface DynamicManagerUiAction {
+    data object Refresh : DynamicManagerUiAction
+    data class Search(val query: String) : DynamicManagerUiAction
+    data class SelectApp(val app: DynamicManagerApp) : DynamicManagerUiAction
+    data class SetManual(val size: Int, val hash: String) : DynamicManagerUiAction
+    data object Clear : DynamicManagerUiAction
+}
 
-    suspend fun refresh() = withContext(Dispatchers.IO) {
-        loading = true
-        if (SuperUserViewModel.getCachedApps(includeManager = true).isEmpty()) {
-            ViewModelProvider(ksuApp)[SuperUserViewModel::class.java].fetchAppList()
-        }
+enum class DynamicManagerOperation { Set, Clear }
 
-        config = getDynamicManagerConfig()
-        val managerIndexes = Natives.getManagersList()?.managers
-            ?.associate { it.uid to it.signatureIndex }
-            .orEmpty()
+sealed interface DynamicManagerUiEvent {
+    data class OperationCompleted(
+        val operation: DynamicManagerOperation,
+        val success: Boolean,
+    ) : DynamicManagerUiEvent
+}
 
-        apps = SuperUserViewModel.getCachedApps(includeManager = true).mapNotNull { app ->
-            val info = app.packageInfo.applicationInfo ?: return@mapNotNull null
-            if (!File(info.nativeLibraryDir, "libksud.so").isFile) return@mapNotNull null
-            val index = managerIndexes[info.uid % 100000]
-            DynamicManagerApp(
-                label = app.label,
-                packageName = app.packageName,
-                packageInfo = app.packageInfo,
-                apkPath = info.sourceDir,
-                selected = index == DYNAMIC_SIGNATURE_INDEX,
-                changeable = index == null || index == DYNAMIC_SIGNATURE_INDEX,
-            )
-        }.sortedWith(compareByDescending<DynamicManagerApp> { it.selected }.thenBy { it.label.lowercase() })
-        loading = false
-    }
+class DynamicManagerViewModel(
+    observeState: ObserveDynamicManagerStateUseCase,
+    private val refreshDynamicManager: RefreshDynamicManagerUseCase,
+    private val selectDynamicManager: SelectDynamicManagerUseCase,
+    private val setManualDynamicManager: SetManualDynamicManagerUseCase,
+    private val clearDynamicManager: ClearDynamicManagerUseCase,
+) : ViewModel() {
+    private val search = MutableStateFlow("")
+    private val mutableEvents = MutableSharedFlow<DynamicManagerUiEvent>(extraBufferCapacity = 1)
+    val events: SharedFlow<DynamicManagerUiEvent> = mutableEvents.asSharedFlow()
 
-    suspend fun select(app: DynamicManagerApp): Boolean = withContext(Dispatchers.IO) {
-        setDynamicManagerApk(app.apkPath).also { success ->
-            if (success) {
-                config = getDynamicManagerConfig()
-                updateSelection(app.packageName)
-            }
-        }
-    }
-
-    suspend fun clearSelection(): Boolean = withContext(Dispatchers.IO) {
-        clearDynamicManager().also { success ->
-            if (success) {
-                config = null
-                updateSelection(null)
-            }
-        }
-    }
-
-    private fun updateSelection(packageName: String?) {
-        apps = apps.map { app ->
-            if (app.selected || app.packageName == packageName) {
-                app.copy(selected = app.packageName == packageName, changeable = true)
+    val state: StateFlow<DynamicManagerUiState> = combine(observeState(), search) { source, query ->
+        val normalized = query.trim()
+        DynamicManagerUiState(
+            config = source.config,
+            apps = if (normalized.isEmpty()) {
+                source.apps
             } else {
-                app
+                source.apps.filter { app ->
+                    app.label.contains(normalized, ignoreCase = true) ||
+                        app.packageName.contains(normalized, ignoreCase = true)
+                }
+            },
+            search = query,
+            isLoading = source.isLoading,
+            isRefreshing = source.isRefreshing,
+            isSubmitting = source.isSubmitting,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = DynamicManagerUiState(),
+    )
+    val uiState: StateFlow<DynamicManagerUiState> = state
+
+    fun dispatch(action: DynamicManagerUiAction) {
+        when (action) {
+            DynamicManagerUiAction.Refresh -> viewModelScope.launch { refresh() }
+
+            is DynamicManagerUiAction.Search -> search.value = action.query
+
+            is DynamicManagerUiAction.SelectApp -> submit(DynamicManagerOperation.Set) {
+                selectDynamicManager(action.app.apkPath)
             }
-        }.sortedWith(compareByDescending<DynamicManagerApp> { it.selected }.thenBy { it.label.lowercase() })
+
+            is DynamicManagerUiAction.SetManual -> submit(DynamicManagerOperation.Set) {
+                setManualDynamicManager(action.size, action.hash)
+            }
+
+            DynamicManagerUiAction.Clear -> submit(DynamicManagerOperation.Clear) {
+                clearDynamicManager()
+            }
+        }
     }
 
-    private companion object {
-        const val DYNAMIC_SIGNATURE_INDEX = 255
+    suspend fun refresh(): Result<Unit> = refreshDynamicManager()
+
+    private fun submit(
+        operation: DynamicManagerOperation,
+        command: suspend () -> Result<Unit>,
+    ) {
+        viewModelScope.launch {
+            val success = command().isSuccess
+            mutableEvents.emit(DynamicManagerUiEvent.OperationCompleted(operation, success))
+        }
     }
 }

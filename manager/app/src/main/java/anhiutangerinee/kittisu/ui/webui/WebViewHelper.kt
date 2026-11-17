@@ -3,7 +3,6 @@ package anhiutangerinee.kittisu.ui.webui
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -19,32 +18,43 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
 import anhiutangerinee.kittisu.R
-import anhiutangerinee.kittisu.ui.util.createRootShell
-import anhiutangerinee.kittisu.ui.viewmodel.ModuleViewModel
+import anhiutangerinee.kittisu.data.AppSettingsRepository
+import anhiutangerinee.kittisu.data.packageinfo.AppIconDataSource
+import anhiutangerinee.kittisu.data.packageinfo.InstalledPackageRepository
+import anhiutangerinee.kittisu.data.webui.WebUiRepository
+import anhiutangerinee.kittisu.ui.viewmodel.SuperUserUiAction
 import anhiutangerinee.kittisu.ui.viewmodel.SuperUserViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
-
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @SuppressLint("SetJavaScriptEnabled")
 internal suspend fun prepareWebView(
     activity: Activity,
     moduleId: String,
     webUIState: WebUIState,
-    moduleViewModel: ModuleViewModel,
+    superUserViewModel: SuperUserViewModel,
+    settingsRepository: AppSettingsRepository,
+    packageRepository: InstalledPackageRepository,
+    appIconDataSource: AppIconDataSource,
+    webUiRepository: WebUiRepository,
+    colorsCssProvider: () -> String,
 ) {
     withContext(Dispatchers.IO) {
-        suspendCancellableCoroutine { continuation ->
-            moduleViewModel.fetchModuleList(callBack = {
-                if (continuation.isActive) continuation.resume(Unit) { _, _, _ -> }
-            })
+        val moduleInfo = try {
+            webUiRepository.getModuleInfo(moduleId)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            withContext(Dispatchers.Main) {
+                webUIState.uiEvent = WebUIEvent.Error(
+                    activity.getString(R.string.module_unavailable, moduleId),
+                )
+            }
+            return@withContext
         }
-
-        val moduleInfo = moduleViewModel.moduleList.find { info -> info.id == moduleId }
 
         if (moduleInfo == null) {
             withContext(Dispatchers.Main) {
@@ -60,16 +70,13 @@ internal suspend fun prepareWebView(
             return@withContext
         }
 
-        webUIState.moduleName = moduleInfo.name
-        webUIState.modDir = "/data/adb/modules/${moduleId}"
-
-        if (SuperUserViewModel.apps.isEmpty()) {
-            SuperUserViewModel().fetchAppList()
+        if (packageRepository.packages.value.isEmpty()) {
+            superUserViewModel.dispatch(SuperUserUiAction.Refresh)
         }
-        val shell = createRootShell(true)
-        webUIState.rootShell = shell
-
         withContext(Dispatchers.Main) {
+            webUIState.moduleName = moduleInfo.name
+            webUIState.modDir = "/data/adb/modules/$moduleId"
+
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
                 @Suppress("DEPRECATION")
                 activity.setTaskDescription(ActivityManager.TaskDescription("KernelSU - ${moduleInfo.name}"))
@@ -83,8 +90,9 @@ internal suspend fun prepareWebView(
             val webView = WebView(activity)
             webView.setBackgroundColor(Color.TRANSPARENT)
 
-            val prefs = activity.getSharedPreferences("settings", Context.MODE_PRIVATE)
-            WebView.setWebContentsDebuggingEnabled(prefs.getBoolean("enable_web_debugging", false))
+            WebView.setWebContentsDebuggingEnabled(
+                settingsRepository.getBoolean("enable_web_debugging", false),
+            )
 
             webView.settings.apply {
                 javaScriptEnabled = true
@@ -97,7 +105,13 @@ internal suspend fun prepareWebView(
                 .setDomain("mui.kernelsu.org")
                 .addPathHandler(
                     "/",
-                    SuFilePathHandler(webRoot, shell, { webUIState.currentInsets }, { enable -> webUIState.isInsetsEnabled = enable })
+                    SuFilePathHandler(
+                        webRoot,
+                        webUiRepository,
+                        { webUIState.currentInsets },
+                        { enable -> webUIState.isInsetsEnabled = enable },
+                        colorsCssProvider,
+                    ),
                 )
                 .build()
 
@@ -108,14 +122,17 @@ internal suspend fun prepareWebView(
                     if (url.scheme.equals("ksu", ignoreCase = true) && url.host.equals("icon", ignoreCase = true)) {
                         val packageName = url.path?.substring(1)
                         if (!packageName.isNullOrEmpty()) {
-                            val icon = AppIconUtil.loadAppIconSync(activity, packageName, 512)
+                            val icon = appIconDataSource.loadSync(packageName, 512)
                             if (icon != null) {
                                 val stream = ByteArrayOutputStream()
                                 icon.compress(Bitmap.CompressFormat.PNG, 100, stream)
                                 return WebResourceResponse(
-                                    "image/png", null, 200, "OK",
+                                    "image/png",
+                                    null,
+                                    200,
+                                    "OK",
                                     mapOf("Access-Control-Allow-Origin" to "*"),
-                                    ByteArrayInputStream(stream.toByteArray())
+                                    ByteArrayInputStream(stream.toByteArray()),
                                 )
                             }
                         }
@@ -151,7 +168,9 @@ internal suspend fun prepareWebView(
                 }
 
                 override fun onShowFileChooser(
-                    webView: WebView?, filePathCallback: ValueCallback<Array<Uri>>?, fileChooserParams: FileChooserParams?
+                    webView: WebView?,
+                    filePathCallback: ValueCallback<Array<Uri>>?,
+                    fileChooserParams: FileChooserParams?,
                 ): Boolean {
                     webUIState.filePathCallback?.onReceiveValue(null)
                     webUIState.filePathCallback = filePathCallback
@@ -166,7 +185,7 @@ internal suspend fun prepareWebView(
             }
 
             // JS Interface
-            val webviewInterface = WebViewInterface(webUIState)
+            val webviewInterface = WebViewInterface(webUIState, packageRepository, webUiRepository)
             webUIState.webView = webView
             webView.addJavascriptInterface(webviewInterface, "ksu")
             webUIState.uiEvent = WebUIEvent.WebViewReady

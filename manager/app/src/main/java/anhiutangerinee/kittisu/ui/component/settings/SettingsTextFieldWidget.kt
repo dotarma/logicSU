@@ -6,8 +6,12 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -70,6 +74,7 @@ fun SettingsTextFieldWidget(
     useLabelAsPlaceholder: Boolean = false,
     enabled: Boolean = true,
     readOnly: Boolean = false,
+    renderBackgroundBlur: Boolean = true,
     inputTransformation: InputTransformation? = null,
     textStyle: TextStyle = MaterialTheme.typography.bodyMediumEmphasized.copy(
         color = MaterialTheme.colorScheme.onSurface,
@@ -132,8 +137,8 @@ fun SettingsTextFieldWidget(
 
     val currentOnTextLayout by rememberUpdatedState(onTextLayout)
 
-    val showTitle = if (useLabelAsPlaceholder) state.text.isNotEmpty() else true
-    val showPlaceholder = useLabelAsPlaceholder && state.text.isEmpty()
+    val showFloatingTitle = useLabelAsPlaceholder && (focused || state.text.isNotEmpty())
+    val showPlaceholder = useLabelAsPlaceholder && !showFloatingTitle
 
     fun onClickInternal() {
         if (onClick != null) {
@@ -148,12 +153,39 @@ fun SettingsTextFieldWidget(
 
     SettingsBaseWidget(
         modifier = modifier,
-        title = if (showTitle) title else null,
+        title = if (useLabelAsPlaceholder) null else title,
         icon = null,
         iconPlaceholder = false,
+        isOnBackground = renderBackgroundBlur,
         leadingContent = leadingContent,
-        onClick = {
-            onClickInternal()
+        onClick = if (isClickableMode) {
+            { onClickInternal() }
+        } else {
+            null
+        },
+        foreContent = {
+            if (useLabelAsPlaceholder) {
+                AnimatedVisibility(
+                    visible = showFloatingTitle,
+                    enter = slideInVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        initialOffsetY = { it },
+                    ) + fadeIn(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    ),
+                    exit = slideOutVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        targetOffsetY = { it },
+                    ) + fadeOut(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    ),
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
         },
         descriptionColumnContent = {
             BasicTextField(
@@ -189,14 +221,31 @@ fun SettingsTextFieldWidget(
                 scrollState = scrollState,
                 decorator = { innerTextField ->
                     Column {
+                        val placeholderAnimationScope = this
                         Box(
-                            modifier = Modifier.clickable(
-                                enabled = onClick != null || !focused
-                            ) {
-                                onClickInternal()
-                            }
+                            modifier = if (isClickableMode) {
+                                Modifier.clickable {
+                                    onClickInternal()
+                                }
+                            } else {
+                                Modifier
+                            },
                         ) {
-                            if (showPlaceholder) {
+                            placeholderAnimationScope.AnimatedVisibility(
+                                visible = showPlaceholder,
+                                enter = slideInVertically(
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    initialOffsetY = { -it },
+                                ) + fadeIn(
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                ),
+                                exit = slideOutVertically(
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    targetOffsetY = { -it },
+                                ) + fadeOut(
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                ),
+                            ) {
                                 Text(
                                     text = title,
                                     style = textStyle,
@@ -208,7 +257,7 @@ fun SettingsTextFieldWidget(
                                 Text(
                                     text = error,
                                     color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall
+                                    style = MaterialTheme.typography.bodySmall,
                                 )
                             }
 
@@ -219,18 +268,18 @@ fun SettingsTextFieldWidget(
                             visible = focused,
                             enter = expandHorizontally(
                                 animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                expandFrom = Alignment.Start // Unroll downwards like a blind
+                                expandFrom = Alignment.Start, // Unroll downwards like a blind
                             ) + expandVertically(
                                 animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                expandFrom = Alignment.Top // Unroll downwards like a blind
+                                expandFrom = Alignment.Top, // Unroll downwards like a blind
                             ),
                             exit = shrinkHorizontally(
                                 animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                shrinkTowards = Alignment.Start // Roll up upwards
+                                shrinkTowards = Alignment.Start, // Roll up upwards
                             ) + shrinkVertically(
                                 animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                                shrinkTowards = Alignment.Top // Unroll downwards like a blind
-                            )
+                                shrinkTowards = Alignment.Top, // Unroll downwards like a blind
+                            ),
                         ) {
                             Spacer(modifier = Modifier.height(2.dp))
 
@@ -240,40 +289,44 @@ fun SettingsTextFieldWidget(
                                     error.isNotBlank() -> MaterialTheme.colorScheme.error
                                     !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                                     else -> MaterialTheme.colorScheme.primary
-                                }
+                                },
                             )
                         }
                     }
-                }
+                },
             )
 
             AnimatedVisibility(
                 visible = error.isNotBlank() && (focused || state.text.isNotBlank()),
                 enter = expandHorizontally(
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    expandFrom = Alignment.Start // Unroll downwards like a blind
+                    expandFrom = Alignment.Start, // Unroll downwards like a blind
                 ) + expandVertically(
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    expandFrom = Alignment.Top // Unroll downwards like a blind
+                    expandFrom = Alignment.Top, // Unroll downwards like a blind
                 ),
                 exit = shrinkHorizontally(
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    shrinkTowards = Alignment.Start // Roll up upwards
+                    shrinkTowards = Alignment.Start, // Roll up upwards
                 ) + shrinkVertically(
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                    shrinkTowards = Alignment.Top // Unroll downwards like a blind
-                )
+                    shrinkTowards = Alignment.Top, // Unroll downwards like a blind
+                ),
             ) {
                 Text(
                     modifier = Modifier.padding(top = 2.dp),
                     text = error,
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         },
-        trailingContent = {
-            trailingContent?.invoke()
-        }
+        trailingContent = if (trailingContent != null) {
+            {
+                trailingContent()
+            }
+        } else {
+            null
+        },
     )
 }
