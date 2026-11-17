@@ -123,4 +123,4 @@ The APK will be at `manager/app/build/outputs/apk/release/`.
 </details>
 
 ## Contact us
-You can contact us in this Telegram group: [[link]](https://t.me/terebiko_logicSU)
+You can contact us in this Telegram group: [[link]](https://t.me/ncattchat)
