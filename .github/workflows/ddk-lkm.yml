@@ -104,6 +104,13 @@ jobs:
         make O="$KDIR" modules_prepare
         popd
 
+        # The prebuilt KDIR ships Module.symvers, but the freshly generated
+        # x86_64 KDIR does not. Without it modpost cannot resolve symbols and
+        # writes an invalid empty extended-modversions table for 6.12.
+        if [ -f "/opt/ddk/kdir/$KMI/Module.symvers" ]; then
+          cp "/opt/ddk/kdir/$KMI/Module.symvers" "$KDIR/Module.symvers"
+        fi
+
         if [ ! -f "$KDIR/include/generated/compile.h" ]; then
           cp "/opt/ddk/kdir/$KMI/include/generated/compile.h" "$KDIR/include/generated/"
         fi
