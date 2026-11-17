@@ -66,9 +66,9 @@ jobs:
     - name: Build ksud
       run: |
         if [ "${{github.event_name}}" == "pull_request" ]; then
-          export KSU_PACKAGE_NAME="anhiutangerinee.kittisu.pr${{github.event.pull_request.number}}"
+          export KSU_PACKAGE_NAME="armqi.logically.su.pr${{github.event.pull_request.number}}"
         elif [ "${{github.ref_type}}" != "tag" ] && [ "${{github.ref_name}}" != "main" ]; then
-          export KSU_PACKAGE_NAME="anhiutangerinee.kittisu.dev"
+          export KSU_PACKAGE_NAME="armqi.logically.su.dev"
         fi
         cd userspace/ksud/
         cargo ndk b -P 26 -t ${{ inputs.target }} -r -Z build-std-features="optimize_for_size" -Z trim-paths

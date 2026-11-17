@@ -19,6 +19,6 @@ dependencies {
 
 tasks.jar {
     manifest {
-        attributes("Lint-Registry-v2" to "anhiutangerinee.kittisu.lint.BakaSuIssueRegistry")
+        attributes("Lint-Registry-v2" to "armqi.logically.su.lint.LogicSuIssueRegistry")
     }
 }

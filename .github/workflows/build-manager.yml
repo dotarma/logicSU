@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       build_manager:
-        description: 'Build KittiSU Manager APK'
+        description: 'Build logicSU Manager APK'
         required: false
         default: true
         type: boolean
@@ -139,6 +139,8 @@ jobs:
           mv ksuinit-x86_64/ksuinit userspace/ksud/bin/x86_64/
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -501,11 +503,11 @@ jobs:
             find downloaded-artifacts -type f -name "*.apk" -exec cp -f {} release-assets/ \;
           fi
 
-          # 2. Kernel LKMs: zip into KittiSU-LKM-modules.zip
+          # 2. Kernel LKMs: zip into logicSU-LKM-modules.zip
           mkdir -p /tmp/lkm-modules
           find downloaded-artifacts -type f -name "*_kernelsu.ko" -exec cp -f {} /tmp/lkm-modules/ \; 2>/dev/null || true
           if compgen -G "/tmp/lkm-modules/*.ko" > /dev/null; then
-            (cd /tmp/lkm-modules && zip -r9 "$GITHUB_WORKSPACE/release-assets/KittiSU-LKM-modules.zip" ./*.ko)
+            (cd /tmp/lkm-modules && zip -r9 "$GITHUB_WORKSPACE/release-assets/logicSU-LKM-modules.zip" ./*.ko)
           fi
 
           # 3. Ksud binaries
@@ -549,10 +551,10 @@ jobs:
 
           if [ "$IS_MAIN" = "true" ]; then
             PRERELEASE=false
-            RELEASE_TITLE="KittiSU $BUILD_DATE"
+            RELEASE_TITLE="logicSU $BUILD_DATE"
           else
             PRERELEASE=true
-            RELEASE_TITLE="KittiSU Pre-release [${REF_NAME}] - $BUILD_DATE"
+            RELEASE_TITLE="logicSU Pre-release [${REF_NAME}] - $BUILD_DATE"
           fi
 
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT

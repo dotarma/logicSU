@@ -1,6 +1,6 @@
-# KittiSU
+# logicSU
 <p align="center">
-  <img src="../../assets/kittisu_logo.jpg" width="220px" alt="KittiSU Logo">
+  <img src="../../assets/logicsu_logo.jpg" width="220px" alt="logicSU Logo">
 </p>
 
 <p align="center">
@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/anotheranhiutangerine/KittiSU/releases/latest"><img src="https://img.shields.io/github/v/release/anotheranhiutangerine/KittiSU?label=Release&logo=github" alt="Phiên bản mới nhất"></a>
+  <a href="https://github.com/dotarma/logicSU/releases/latest"><img src="https://img.shields.io/github/v/release/dotarma/logicSU?label=Release&logo=github" alt="Phiên bản mới nhất"></a>
   <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html"><img src="https://img.shields.io/badge/License-GPL%20v2-orange.svg?logo=gnu" alt="Kernel License: GPL v2"></a>
-  <a href="/LICENSE"><img src="https://img.shields.io/github/license/anotheranhiutangerine/KittiSU?logo=gnu" alt="Phần khác License: GPL v3"></a>
+  <a href="/LICENSE"><img src="https://img.shields.io/github/license/dotarma/logicSU?logo=gnu" alt="Phần khác License: GPL v3"></a>
 </p>
 
 ---
@@ -25,14 +25,14 @@
 2. Hệ thống module dựa trên [metamodules](https://kernelsu.org/guide/metamodule.html): Kiến trúc plug-in cho các sửa đổi không cần thay đổi hệ thống
 3. [App Profile](https://kernelsu.org/guide/app-profile.html): Đóng quyền root vào lồng
 4. Hỗ trợ non-GKI và GKI 1.0
-5. Giao diện manager với branding KittiSU tùy chỉnh
+5. Giao diện manager với branding logicSU tùy chỉnh
 6. Công cụ quản lý SuSFS tích hợp sẵn
 7. Hỗ trợ đa quản lý — hoạt động với các backend [Official KernelSU](https://github.com/tiann/KernelSU) / [RKSU](https://github.com/rsuntk/KernelSU) / [MKSU](https://github.com/5ec1cff/KernelSU) / [SukiSU](https://github.com/SukiSU-Ultra/SukiSU-Ultra)
 
 
 ## Trạng thái tương thích
 
-- KittiSU chính thức hỗ trợ các thiết bị Android GKI 2.0 (kernel 5.10+).
+- logicSU chính thức hỗ trợ các thiết bị Android GKI 2.0 (kernel 5.10+).
 - Các kernel cũ hơn (3.4+) cũng tương thích, nhưng phải tự build kernel.
 - Hiện chỉ hỗ trợ kiến trúc: `arm64-v8a`, `armeabi-v7a` và `x86_64`.
 - [SuSFS](https://gitlab.com/simonpunk/susfs4ksu) trong dự án này **chỉ** hỗ trợ backport đến kernel 4.3+.
@@ -48,7 +48,7 @@
 
 ## Build Kernel
 
-KittiSU sử dụng GitHub Actions để build kernel. Xem repository [GKI_KernelSU_SUSFS](https://github.com/anotheranhiutangerine/GKI_KernelSU_SUSFS) để biết thêm chi tiết.
+logicSU sử dụng GitHub Actions để build kernel. Xem repository [GKI_KernelSU_SUSFS](https://github.com/anotheranhiutangerine/GKI_KernelSU_SUSFS) để biết thêm chi tiết.
 
 ## Build Manager
 
@@ -85,8 +85,8 @@ APK sẽ nằm tại `manager/app/build/outputs/apk/release/`.
 
 ## Ghi công
 
-### KittiSU
-- [anotheranhiutangerine](https://github.com/anotheranhiutangerine) — Người duy trì fork KittiSU
+### logicSU
+- [anotheranhiutangerine](https://github.com/anotheranhiutangerine) — Người duy trì fork logicSU
 
 <details>
 <summary>Ghi công ReSukiSU</summary>

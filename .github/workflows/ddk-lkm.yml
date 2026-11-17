@@ -10,7 +10,7 @@ on:
       ddk_release:
         description: 'DDK release version'
         required: false
-        default: '20260313'
+        default: '20260828'
         type: string
       expected_pr_build_size:
         description: 'Second expected signature size (for PR builds)'
@@ -41,7 +41,7 @@ jobs:
         EXPECTED_PR_BUILD_SIZE: ${{ inputs.expected_pr_build_size }}
         EXPECTED_PR_BUILD_HASH: ${{ inputs.expected_pr_build_hash }}
       run: |
-        git config --global --add safe.directory /__w/KittiSU/KittiSU
+        git config --global --add safe.directory /__w/logicSU/logicSU
         cd kernel
 
         echo "=== Building kernelsu.ko for KMI: ${{ inputs.kmi }} ==="
@@ -101,6 +101,16 @@ jobs:
         if [ "$KMI" = "android16-6.12" ]; then
           scripts/config --file "$KDIR/.config" -e CFI_ICALL_NORMALIZE_INTEGERS
         fi
+
+        # The DDK sources patch modpost to skip symbol resolution, so with
+        # CONFIG_RUST (and therefore CONFIG_EXTENDED_MODVERSIONS) modpost
+        # emits an empty ____version_ext_names[] initializer, which is not
+        # valid C. Current DDK makes that initializer a valid empty string;
+        # apply the same fix here for images built from older sources.
+        MODPOST_SRC="/opt/ddk/src/$KMI/scripts/mod/modpost.c"
+        sed -i 's/^static void check_exports(/static void __attribute__((unused)) check_exports(/' "$MODPOST_SRC"
+        sed -i 's|__version_ext_names\\") =\\n|__version_ext_names\\") = \\"\\"\\n|' "$MODPOST_SRC"
+
         make O="$KDIR" modules_prepare
         popd
 

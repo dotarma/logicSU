@@ -19,7 +19,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "KittiSU"
+rootProject.name = "logicSU"
 include(":app")
 include(":baselineprofile")
 include(":lint-rules")
