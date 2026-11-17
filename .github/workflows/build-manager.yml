@@ -139,6 +139,8 @@ jobs:
           mv ksuinit-x86_64/ksuinit userspace/ksud/bin/x86_64/
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
 
       - uses: Swatinem/rust-cache@v2
         with:
