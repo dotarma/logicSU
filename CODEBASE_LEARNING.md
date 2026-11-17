@@ -1,9 +1,9 @@
-# 代码仓学习笔记 (Codebase Learning Guide) - KittiSU
+# 代码仓学习笔记 (Codebase Learning Guide) - logicSU
 
 ## 1. 项目概览
 
 **这个项目做什么：**
-KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管理系统。它是 **ReSukiSU** 的下游分支（Fork），源自 **SukiSU-Ultra** 与 **KernelSU**。KittiSU 提供了内核级 `su` 权限管理、Metamodule 模块挂载、App Profile 权限沙箱、SuSFS 防检测集成、AnyKernel3 刷写引擎、模块备份与故障恢复机制，以及全新的 Jetpack Compose 现代化管理器（Manager UI）。
+logicSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管理系统。它是 **ReSukiSU** 的下游分支（Fork），源自 **SukiSU-Ultra** 与 **KernelSU**。logicSU 提供了内核级 `su` 权限管理、Metamodule 模块挂载、App Profile 权限沙箱、SuSFS 防检测集成、AnyKernel3 刷写引擎、模块备份与故障恢复机制，以及全新的 Jetpack Compose 现代化管理器（Manager UI）。
 
 **项目类型：**
 跨内核（Linux Kernel C）+ 用户空间守护进程/CLI（Rust & C++）+ Android 应用（Kotlin / Jetpack Compose）的三层混合系统项目。
@@ -24,20 +24,20 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
 2. `kernel/manager/apk_sign.c` & `kernel/feature/dynamic_manager.c`: 理解 Manager 认证与 Dynamic Manager 动态信任机制。
 3. `userspace/ksud/src/anykernel3.rs` & `userspace/ksud/src/mkbootfs.cpp`: 理解内置 AnyKernel3 刷写内核实现。
 4. `userspace/ksud/src/android/module/backup.rs` & `recovery.rs`: 理解模块备份还原与防 Bootloop 自动禁用机制。
-5. `manager/app/src/main/java/anhiutangerinee/kittisu/ui/util/module/`: 理解 Module Presets 远程预设与 Post-install Bash 执行逻辑。
+5. `manager/app/src/main/java/armqi/logically/su/ui/util/module/`: 理解 Module Presets 远程预设与 Post-install Bash 执行逻辑。
 
 ---
 
 ## 2. 学习关注点
 
 **用户指定重点模块与功能：**
-- KittiSU 是什么、包含哪些组件、现存技术局限与安全隐患。
+- logicSU 是什么、包含哪些组件、现存技术局限与安全隐患。
 - 与上游母仓库 ReSukiSU 的详细差异与对比（功能增删、上游补丁滞后情况）。
-- KittiSU 需进一步开发或升级重构的功能清单。
+- logicSU 需进一步开发或升级重构的功能清单。
 
 **本指南如何围绕这些重点组织：**
 - 详细梳理 Kernel、Userspace (`ksud`/`ksuinit`)、Manager 三层架构及其核心数据流。
-- 逐项对比 ReSukiSU 与 KittiSU 的 Commit 差异与设计哲学分歧（如 KPM 移除、Dynamic Manager、Presets 系统）。
+- 逐项对比 ReSukiSU 与 logicSU 的 Commit 差异与设计哲学分歧（如 KPM 移除、Dynamic Manager、Presets 系统）。
 - 标明经过代码行号审计的真实 Bug、安全漏洞与局限性。
 
 ---
@@ -70,7 +70,7 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
   - `ksud/`: 核心守护程序与 CLI 工具，管理模块、挂载、备份、SuSFS、AnyKernel3 刷写
   - `ksuinit/`: 作为 init 的注入垫片，负责加载 LKM 并包含 vermagic 重试修改逻辑
 - `manager/`: Android 应用（GPL-3.0）
-  - `app/src/main/java/anhiutangerinee/kittisu/`: Kotlin 源码，UI 与业务逻辑
+  - `app/src/main/java/armqi/logically/su/`: Kotlin 源码，UI 与业务逻辑
   - `app/src/main/cpp/`: JNI C 绑定 (`ksu.c`, `scan_driver_fd`)，通过 `[ksu_driver]` 文件描述符与内核通信
   - `randomizer`: 混淆 Manager 包名与签名的重命名自动化脚本
 - `scripts/`: CI 与辅助脚本 (`ksubot.py`, `check-dynamic-manager.sh`)
@@ -82,7 +82,7 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
 1. **Kernel 驱动入口:** `kernel/core/ksu.c:ksu_init()`
 2. **Ksud 命令行入口:** `userspace/ksud/src/main.rs:main()` -> `android::cli::run()`
 3. **Ksuinit 注入入口:** `userspace/ksuinit/src/lib.rs` (作为 1 号进程启动前置运行)
-4. **Manager Android 入口:** `manager/app/src/main/java/anhiutangerinee/kittisu/ui/MainActivity.kt`
+4. **Manager Android 入口:** `manager/app/src/main/java/armqi/logically/su/ui/MainActivity.kt`
 5. **Manager Native 通信入口:** `manager/app/src/main/cpp/ksu.c:scan_driver_fd()`
 
 ---
@@ -92,7 +92,7 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
 ### 流程一：Manager 发现与内核通信流程
 1. 系统启动时，`pkg_observer.c` 通过 `fsnotify` 监听 `/data/system/packages.list`。
 2. 当 Manager APK 安装或更新时，触发 `track_throne()`。
-3. `apk_sign.c:check_v2_signature()` 校验 APK 的 V2 签名哈希是否匹配 `EXPECTED_HASH_KITTISU` 或 `dynamic_manager` 设定的动态哈希。
+3. `apk_sign.c:check_v2_signature()` 校验 APK 的 V2 签名哈希是否匹配 `kernel/manager/manager_sign.h` 中的 `EXPECTED_HASH_*` 或 `dynamic_manager` 设定的动态哈希。
 4. 校验通过后，内核将该 App ID 记录进 `ksu_manager_appid_list`。
 5. Manager 启动时，`scan_driver_fd()` 在 `/proc/self/fd` 查找内核赋予的 `[ksu_driver]` 虚拟文件，通过 `ioctl` 发起 `KSU_IOCTL_GET_INFO`。
 
@@ -106,7 +106,7 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
    - 捕获 `ui_print` 输出流并实时回传给 Manager 终端 UI。
 
 ### 流程三：Module Presets 预设与 Post-install 执行流程
-1. Manager 访问预设源（如 `https://raw.githubusercontent.com/terebiko/KittiSU/presets/index.json`）。
+1. Manager 访问预设源（如 `https://raw.githubusercontent.com/dotarma/logicSU/presets/index.json`）。
 2. 解析预设中的模块条目，若 URL 为 `github-latest://<owner>/<repo>`，调用 GitHub API 动态解析最新 release zip。
 3. 下载并依次刷写各模块。
 4. 若预设包含 `postInstalls`，`PresetPostInstallManager.kt` 将远程脚本下载至私有目录，并通过 `getRootShell(globalMnt = true)` 在全局命名空间以 root 执行 `/system/bin/sh <script>`。
@@ -115,7 +115,7 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
 
 ## 7. 后端与系统架构相关笔记
 
-- **UAPI 兼容性:** KittiSU 支持 `KSU_IOCTL_GET_INFO` 以及 `KSU_IOCTL_GET_INFO_LEGACY`，当运行在旧版内核驱动上时自动回退。
+- **UAPI 兼容性:** logicSU 支持 `KSU_IOCTL_GET_INFO` 以及 `KSU_IOCTL_GET_INFO_LEGACY`，当运行在旧版内核驱动上时自动回退。
 - **Dynamic Manager:** 允许在运行时通过 root shell 调用 `ksud kernel dynamic-manager set-apk <path>` 动态向内核注册任意签名的 Manager，极大便利了开发、定制版 Manager 与 Spoof 打包。
 - **SELinux 深度隐藏:** 通过在内核中 hook `selinux_write_op`、`security_compute_av` 和 `SEL_STATUS` mmap 映射页，使用 `fake_status` 向用户空间伪造 Enforcing 状态，即使内核处于 Permissive 或规则被篡改。
 
@@ -136,7 +136,7 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
 ## 9. 学习路线
 
 ### 阶段 1：建立整体认识
-阅读 `README.md`、`kernel/Kconfig` 以及 `userspace/ksud/src/android/cli.rs`，了解 KittiSU 包含的命令集。
+阅读 `README.md`、`kernel/Kconfig` 以及 `userspace/ksud/src/android/cli.rs`，了解 logicSU 包含的命令集。
 
 ### 阶段 2：跟踪一条真实流程
 跟踪 `anykernel3.rs` 如何解构 update-binary 并通过管道重定向 `ui_print` 到 Manager 界面。
@@ -155,7 +155,7 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
 ## 10. 练习任务
 
 1. **小型阅读任务:** 对比 `kernel/manager/manager.c` 中的 `ksu_handle_get_managers_cmd` 与 ReSukiSU 对应函数，识别 RCU critical section 内调用 `copy_to_user` 的潜在风险。
-2. **小型代码改动:** 在 `userspace/ksud/src/android/cli.rs` 中将默认包名从 `com.resukisu.resukisu` 更新为 `anhiutangerinee.kittisu`。
+2. **小型代码改动:** 在 `userspace/ksud/src/android/cli.rs` 中将默认包名从 `com.resukisu.resukisu` 更新为 `armqi.logically.su`。
 3. **测试或调试任务:** 编写测试用例验证 `userspace/ksud/src/android/recovery.rs` 在 `state.failures >= 2` 时能否可靠禁用更新目录下的故障模块。
 4. **更深入的扩展任务:** 为 `PresetPostInstallManager.kt` 恢复或重新设计 Ed25519 签名校验机制，防止未受信任的远程预设 root 脚本注入执行。
 
@@ -163,7 +163,7 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
 
 ## 11. 未解问题
 
-1. 移除 KPM 后，对于部分深度依赖 KernelPatch 独有特性（如动态 hook 特殊内核私有符号）的用户群体，KittiSU 目前缺乏对等替代品。
+1. 移除 KPM 后，对于部分深度依赖 KernelPatch 独有特性（如动态 hook 特殊内核私有符号）的用户群体，logicSU 目前缺乏对等替代品。
 2. AnyKernel3 注入器硬编码了 `chmod -R 755 tools bin;` 作为锚点，如果遇到非标准 AnyKernel3 模板包将直接报错拒绝。
 
 ---
@@ -172,4 +172,4 @@ KittiSU 是一个基于 Linux Kernel 的 Android Root 解决方案与模块管�
 
 1. `userspace/ksud/src/android/susfs/`: 深入 SuSFS 配置同步模型。
 2. `kernel/feature/selinux_hide.c`: 分析 `fake_status` 与 `static_key` 优化。
-3. `manager/app/src/main/java/anhiutangerinee/kittisu/ui/screen/modulePreset/`: 分析预设编辑与导入导出状态机。
+3. `manager/app/src/main/java/armqi/logically/su/ui/screen/modulePreset/`: 分析预设编辑与导入导出状态机。

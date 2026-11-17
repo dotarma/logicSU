@@ -40,7 +40,7 @@ val isReleaseTask =
     project.gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
 
 android {
-    namespace = "anhiutangerinee.kittisu"
+    namespace = "armqi.logically.su"
 
     buildTypes {
         debug {
@@ -180,7 +180,7 @@ baselineProfile {
 
 base {
     archivesName.set(
-        "KittiSU_${managerVersionName}_$managerVersionCode",
+        "logicSU_${managerVersionName}_$managerVersionCode",
     )
 }
 

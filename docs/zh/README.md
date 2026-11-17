@@ -1,6 +1,6 @@
-# KittiSU
+# logicSU
 <p align="center">
-  <img src="../../assets/kittisu_logo.jpg" width="220px" alt="KittiSU Logo">
+  <img src="../../assets/logicsu_logo.jpg" width="220px" alt="logicSU Logo">
 </p>
 
 <p align="center">
@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/anotheranhiutangerine/KittiSU/releases/latest"><img src="https://img.shields.io/github/v/release/anotheranhiutangerine/KittiSU?label=Release&logo=github" alt="最新发行"></a>
+  <a href="https://github.com/dotarma/logicSU/releases/latest"><img src="https://img.shields.io/github/v/release/dotarma/logicSU?label=Release&logo=github" alt="最新发行"></a>
   <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html"><img src="https://img.shields.io/badge/License-GPL%20v2-orange.svg?logo=gnu" alt="Kernel License: GPL v2"></a>
-  <a href="/LICENSE"><img src="https://img.shields.io/github/license/anotheranhiutangerine/KittiSU?logo=gnu" alt="其他部分 License: GPL v3"></a>
+  <a href="/LICENSE"><img src="https://img.shields.io/github/license/dotarma/logicSU?logo=gnu" alt="其他部分 License: GPL v3"></a>
 </p>
 
 ---
@@ -25,14 +25,14 @@
 2. 基于 [metamodules](https://kernelsu.org/zh_CN/guide/metamodule.html) 的模块系统：可插拔的无系统修改架构
 3. [App Profile](https://kernelsu.org/zh_CN/guide/app-profile.html)：把 Root 权限关进笼子里
 4. 支持 non-GKI 与 GKI 1.0
-5. KittiSU 品牌自定义管理器主题
+5. logicSU 品牌自定义管理器主题
 6. 内置 SuSFS 管理工具
 7. 多管理器支持 — 兼容 [官方 KernelSU](https://github.com/tiann/KernelSU) / [RKSU](https://github.com/rsuntk/KernelSU) / [MKSU](https://github.com/5ec1cff/KernelSU) / [SukiSU](https://github.com/SukiSU-Ultra/SukiSU-Ultra) 后端
 
 
 ## 兼容状态
 
-- KittiSU 官方支持 Android GKI 2.0 设备（内核版本 5.10 以上）。
+- logicSU 官方支持 Android GKI 2.0 设备（内核版本 5.10 以上）。
 - 旧内核也是兼容的（3.4+），不过需要自己编译内核。
 - 目前支持架构：`arm64-v8a`、`armeabi-v7a`、`x86_64`。
 - [SuSFS](https://gitlab.com/simonpunk/susfs4ksu) 在本项目中**仅**支持 backport 到内核 4.3+。
@@ -48,7 +48,7 @@
 
 ## 构建内核
 
-KittiSU 使用 GitHub Actions 构建内核。详见 [GKI_KernelSU_SUSFS](https://github.com/anotheranhiutangerine/GKI_KernelSU_SUSFS) 仓库。
+logicSU 使用 GitHub Actions 构建内核。详见 [GKI_KernelSU_SUSFS](https://github.com/anotheranhiutangerine/GKI_KernelSU_SUSFS) 仓库。
 
 ## 构建管理器
 
@@ -85,8 +85,8 @@ APK 输出路径：`manager/app/build/outputs/apk/release/`
 
 ## 鸣谢
 
-### KittiSU
-- [anotheranhiutangerine](https://github.com/anotheranhiutangerine) — KittiSU 分支维护者
+### logicSU
+- [anotheranhiutangerine](https://github.com/anotheranhiutangerine) — logicSU 分支维护者
 
 <details>
 <summary>ReSukiSU 鸣谢</summary>

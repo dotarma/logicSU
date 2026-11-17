@@ -1,6 +1,6 @@
-# KittiSU
+# logicSU
 <p align="center">
-  <img src="assets/kittisu_logo.jpg" width="220px" alt="KittiSU Logo">
+  <img src="assets/logicsu_logo.jpg" width="220px" alt="logicSU Logo">
 </p>
 
 <p align="center">
@@ -12,9 +12,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/anotheranhiutangerine/KittiSU/releases/latest"><img src="https://img.shields.io/github/v/release/anotheranhiutangerine/KittiSU?label=Release&logo=github" alt="Latest release"></a>
+  <a href="https://github.com/dotarma/logicSU/releases/latest"><img src="https://img.shields.io/github/v/release/dotarma/logicSU?label=Release&logo=github" alt="Latest release"></a>
   <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html"><img src="https://img.shields.io/badge/License-GPL%20v2-orange.svg?logo=gnu" alt="Kernel License: GPL v2"></a>
-  <a href="/LICENSE"><img src="https://img.shields.io/github/license/anotheranhiutangerine/KittiSU?logo=gnu" alt="Other part License: GPL v3"></a>
+  <a href="/LICENSE"><img src="https://img.shields.io/github/license/dotarma/logicSU?logo=gnu" alt="Other part License: GPL v3"></a>
 </p>
 
 ---
@@ -25,14 +25,14 @@
 2. Module system based on [metamodules](https://kernelsu.org/guide/metamodule.html): Pluggable infrastructure for systemless modifications
 3. [App Profile](https://kernelsu.org/guide/app-profile.html): Lock up the root power in a cage
 4. Support non-GKI and GKI 1.0
-5. Custom manager theme with KittiSU branding
+5. Custom manager theme with logicSU branding
 6. Built-in SuSFS management tool
 7. Multi-manager support — works with [Official KernelSU](https://github.com/tiann/KernelSU) / [RKSU](https://github.com/rsuntk/KernelSU) / [MKSU](https://github.com/5ec1cff/KernelSU) / [SukiSU](https://github.com/SukiSU-Ultra/SukiSU-Ultra) backends
 
 
 ## Compatibility Status
 
-- KittiSU officially supports Android GKI 2.0 devices (kernel 5.10+).
+- logicSU officially supports Android GKI 2.0 devices (kernel 5.10+).
 - Older kernels (3.4+) are also compatible, but the kernel will have to be built manually.
 - Currently, only `arm64-v8a`, `armeabi-v7a` and `x86_64` are supported.
 - [SuSFS](https://gitlab.com/simonpunk/susfs4ksu) in this project **only** supports backport to kernel 4.3+.
@@ -47,14 +47,14 @@
 | **SuSFS Inline Hook** | Hook from [SuSFS](https://github.com/simonpunk/susfs4ksu), similar to Manual Hook but provided by the SuSFS project. |
 
 ## Integration
-### Here is the command to add KittiSU to your kernel source.
+### Here is the command to add logicSU to your kernel source.
 ```
-curl -LSs "https://raw.githubusercontent.com/anotheranhiutangerine/KittiSU/main/kernel/setup.sh" | bash
+curl -LSs "https://raw.githubusercontent.com/dotarma/logicSU/main/kernel/setup.sh" | bash
 ```
 
 ## Building the Kernel
 
-KittiSU uses GitHub Actions for kernel builds. See the [GKI_KernelSU_SUSFS](https://github.com/anotheranhiutangerine/GKI_KernelSU_SUSFS) repository for build workflows.
+logicSU uses GitHub Actions for kernel builds. See the [GKI_KernelSU_SUSFS](https://github.com/anotheranhiutangerine/GKI_KernelSU_SUSFS) repository for build workflows.
 
 ## Building the Manager
 
@@ -91,8 +91,8 @@ The APK will be at `manager/app/build/outputs/apk/release/`.
 
 ## Credit
 
-### KittiSU
-- [anotheranhiutangerine](https://github.com/anotheranhiutangerine) — KittiSU fork maintainer
+### logicSU
+- [anotheranhiutangerine](https://github.com/anotheranhiutangerine) — logicSU fork maintainer
 
 <details>
 <summary>ReSukiSU credit</summary>
@@ -123,4 +123,4 @@ The APK will be at `manager/app/build/outputs/apk/release/`.
 </details>
 
 ## Contact us
-You can contact us in this Telegram group: [[link]](https://t.me/terebiko_KittiSU)
+You can contact us in this Telegram group: [[link]](https://t.me/terebiko_logicSU)
